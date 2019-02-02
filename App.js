@@ -6,6 +6,7 @@ import { View as GraphicsView } from 'expo-graphics';
 import {
   TapGestureHandler,
   RotationGestureHandler,
+  PanGestureHandler,
   State
 } from 'react-native-gesture-handler';
 console.disableYellowBox = true;
@@ -16,16 +17,54 @@ const { width, height } = Dimensions.get('window');
 export default class App extends React.Component {
   screenCenter = new THREE.Vector2(0.5, 0.5);
 
+  _onPanGestureEvent = async ({ nativeEvent }) => {
+    if (nativeEvent.state === State.ACTIVE && this.mesh) {
+      this.cube.position.setY(0.1);
+
+      // Get the size of the renderer
+      const size = this.renderer.getSize();
+
+      const x = nativeEvent.x / size.width;
+      const y = nativeEvent.y / size.height;
+
+      this.mesh.position.set(0,0,0);
+      this.mesh.rotation.set(0,0,0);
+      this.mesh.updateMatrix()
+
+      // Invoke the native hit test method
+      const { hitTest } = await AR.performHitTest(
+        {
+          x: x,
+          y: y
+        },
+        // Result type from intersecting a horizontal plane estimate, determined for the current frame.
+        AR.HitTestResultTypes.HorizontalPlane
+      );
+
+      for (let hit of hitTest) {
+
+        const { worldTransform } = hit;
+  
+        const matrix = new THREE.Matrix4();
+        matrix.fromArray(worldTransform);
+  
+        // Manually update the matrix
+        this.mesh.applyMatrix(matrix);
+        this.mesh.updateMatrix();
+      }
+    }
+  };
+
   _onRotateGestureEvent = (event) => {
-    console.log(event.nativeEvent.rotation);
+    // console.log(event.nativeEvent.rotation);
     if( event.nativeEvent.state === State.ACTIVE && this.mesh ) {
       if (event.nativeEvent.rotation > 0.1 || event.nativeEvent.rotation < -0.1) {
         if ( event.nativeEvent.rotation > 1.5) {
-          this.mesh.rotateY( -1.5 /30 );
+          this.cube.rotateY( -1.5 /30 );
         } else if ( event.nativeEvent.rotation < -1.5) {
-          this.mesh.rotateY( 1.5 /30 );
+          this.cube.rotateY( 1.5 /30 );
         } else {
-          this.mesh.rotateY( -event.nativeEvent.rotation /30 );
+          this.cube.rotateY( -event.nativeEvent.rotation /30 );
         }
       }
     }
@@ -35,7 +74,7 @@ export default class App extends React.Component {
     if (nativeEvent.state === State.ACTIVE) {
       // console.log(nativeEvent.x);
       // console.log(nativeEvent.y);
-      // console.log("TAPI TAPI");
+      console.log("TAPI TAPI");
 
       const x = nativeEvent.x;
       const y = nativeEvent.y;
@@ -46,10 +85,10 @@ export default class App extends React.Component {
       // Get the size of the renderer
       const size = this.renderer.getSize();
 
-      if (!this.cube) {
+      if (!this.mesh) {
         this._placeCube(x / size.width, y / size.height);
       } else {
-        this._runHitTest(x / size.width, y / size.height)
+        // this._runHitTest(x / size.width, y / size.height)
       }
     }
   };
@@ -81,10 +120,8 @@ export default class App extends React.Component {
 
       const { worldTransform } = hit;
 
-      if (this.cube) {
-        this.scene.remove(this.cube);
-        this.scene.remove(this.mesh);
-      }
+
+      this.mesh = new THREE.Object3D();
 
       console.log("CREATE");
         
@@ -98,6 +135,8 @@ export default class App extends React.Component {
 
       // Add the cube to the scene
       this.scene.add(this.mesh);
+
+      this.mesh.add(this.shadowFloor);
 
       // Disable the matrix auto updating system
       this.mesh.matrixAutoUpdate = false;
@@ -120,25 +159,35 @@ export default class App extends React.Component {
     }
   };
 
+  _onPanEnd = ( event ) => {
+    console.log("end");
+    this.cube.position.setY(0.02);
+  }
+
   render() {
     return (
-      <RotationGestureHandler onGestureEvent={this._onRotateGestureEvent}>
-      <Animated.View style={styles.wrapper}>
-        <TapGestureHandler onHandlerStateChange={this._onSingleTap}>
-          <Animated.View style={styles.wrapper}>
-              <GraphicsView
-                style={styles.container}
-                onContextCreate={this.onContextCreate}
-                onRender={this.onRender}
-                onResize={this.onResize}
-                arTrackingConfiguration={AR.TrackingConfigurations.World}
-                isArEnabled
-                isArCameraStateEnabled
-              />
+      <PanGestureHandler onGestureEvent={this._onPanGestureEvent} onHandlerStateChange={this._onPanEnd}>
+        <Animated.View style={styles.wrapper}>
+          <RotationGestureHandler onGestureEvent={this._onRotateGestureEvent}>
+            <Animated.View style={styles.wrapper}>
+              <TapGestureHandler onHandlerStateChange={this._onSingleTap}>
+                <Animated.View style={styles.wrapper}>
+                  <GraphicsView
+                    style={styles.container}
+                    onContextCreate={this.onContextCreate}
+                    onRender={this.onRender}
+                    onResize={this.onResize}
+                    arTrackingConfiguration={AR.TrackingConfigurations.World}
+                    isArEnabled
+                    isArCameraStateEnabled
+                  />
+                </Animated.View>
+              </TapGestureHandler>
             </Animated.View>
-          </TapGestureHandler>
+            </RotationGestureHandler>
         </Animated.View>
-      </RotationGestureHandler>
+        </PanGestureHandler>
+      
     );
   }
 
@@ -163,11 +212,6 @@ export default class App extends React.Component {
     this.arPointLight = new ThreeAR.Light();
     this.arPointLight.position.y = 2;
 
-    this.mesh = new THREE.Object3D();
-
-    // Add the cube to the scene
-    this.scene.add(this.mesh);
-
     this.scene.add(this.arPointLight);
     this.shadowLight = this.getShadowLight();
     this.scene.add(this.shadowLight);
@@ -181,7 +225,6 @@ export default class App extends React.Component {
       height: 1,
       opacity: 0.6,
     });
-    this.mesh.add(this.shadowFloor);
 
     // Create this cool utility function that let's us see all the raw data points.
     this.points = new ThreeAR.Points();
@@ -192,6 +235,7 @@ export default class App extends React.Component {
     this.planes = new ThreeAR.Planes();
     // Add the planes to our scene...
     this.scene.add(this.planes);
+    
 
     this.raycaster = new THREE.Raycaster();
   };
@@ -213,13 +257,15 @@ export default class App extends React.Component {
 
     this.arPointLight.update();
 
-    this.shadowFloor.opacity = this.arPointLight.intensity;
+    if (this.mesh) {
+      this.shadowFloor.opacity = this.arPointLight.intensity;
 
-    this.shadowLight.target.position.copy(this.mesh.position);
-    this.shadowLight.position.copy(this.shadowLight.target.position);
-    this.shadowLight.position.x += 0.1;
-    this.shadowLight.position.y += 1;
-    this.shadowLight.position.z += 0.1;
+      this.shadowLight.target.position.copy(this.mesh.position);
+      this.shadowLight.position.copy(this.shadowLight.target.position);
+      this.shadowLight.position.x += 0.1;
+      this.shadowLight.position.y += 1;
+      this.shadowLight.position.z += 0.1;
+    }
 
     this.renderer.render(this.scene, this.camera);
   };
