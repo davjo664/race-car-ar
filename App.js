@@ -15,13 +15,90 @@ console.disableYellowBox = true;
 
 const { width, height } = Dimensions.get('window');
 
-// A good read on lighting: https://threejs.org/examples/#webgl_lights_physical
 export default class App extends React.Component {
-  screenCenter = new THREE.Vector2(0.5, 0.5);
+
+  /////////// CREATE CONTEXT ////////////////////
+
+  _onContextCreate = async ({ gl, scale: pixelRatio, width, height }) => {
+
+    // Allows ARKit to collect Horizontal surfaces
+    AR.setPlaneDetection(AR.PlaneDetectionTypes.Horizontal);
+
+    this.renderer = new ExpoTHREE.Renderer({ gl, width, height, pixelRatio });
+
+    // Enable some realist rendering props: https://threejs.org/docs/#api/renderers/WebGLRenderer.physicallyCorrectLights
+    this.renderer.gammaInput = this.renderer.gammaOutput = true;
+    this.renderer.shadowMap.enabled = true;
+    this.renderer.physicallyCorrectLights = true;
+    this.renderer.toneMapping = THREE.ReinhardToneMapping;
+
+    this.scene = new THREE.Scene();
+    // Render the video feed behind the scene's objects
+    this.scene.background = new ThreeAR.BackgroundTexture(this.renderer);
+
+    // THREE.PerspectiveCamera that updates it's transform based on the device's orientation
+    this.camera = new ThreeAR.Camera(width, height, 0.01, 10000);
+
+    // THREE.PointLight that will update it's color and intensity based on ARKit's assumption of the room lighting.
+    this.arPointLight = new ThreeAR.Light();
+    this.arPointLight.position.y = 2;
+    this.scene.add(this.arPointLight);
+
+    // Add light that will cast shadows
+    this.shadowLight = this._getShadowLight();
+    this.scene.add(this.shadowLight);
+    this.scene.add(this.shadowLight.target);
+    // this.scene.add(new THREE.DirectionalLightHelper(this.shadowLight));
+
+    
+    // this.scene.add(new THREE.AmbientLight(0x404040));
+
+    // A transparent plane that extends THREE.Mesh and receives shadows from other meshes.
+    this.shadowFloor = new ThreeAR.ShadowFloor({
+      width: 1,
+      height: 1,
+      opacity: 0.6,
+    });
+
+    // Let's us see all the raw data points.
+    this.points = new ThreeAR.Points();
+    this.scene.add(this.points);
+
+    // Let's us see all horizontal planes based on the raw data points.
+    this.planes = new ThreeAR.Planes();
+    this.scene.add(this.planes);
+
+    // Ray caster for hit test
+    this.raycaster = new THREE.Raycaster();
+  };
+
+  _getShadowLight = () => {
+    let light = new THREE.DirectionalLight(0xffffff, 0.2);
+
+    light.castShadow = true;
+
+    // default is 50
+    const shadowSize = 1;
+    light.shadow.camera.left = -shadowSize;
+    light.shadow.camera.right = shadowSize;
+    light.shadow.camera.top = shadowSize;
+    light.shadow.camera.bottom = -shadowSize;
+    light.shadow.camera.near = 0.001;
+    light.shadow.camera.far = 100;
+    light.shadow.camera.updateProjectionMatrix();
+
+    // default is 512
+    light.shadow.mapSize.width = 512;
+    light.shadow.mapSize.height = light.shadow.mapSize.width;
+
+    return light;
+  };
+
+  //////////// GESTURE EVENTS ////////////////
 
   _onPanGestureEvent = async ({ nativeEvent }) => {
     if (nativeEvent.state === State.ACTIVE && this.mesh) {
-      this.cube.position.setY(0.1);
+      this.chair.position.setY(0.1);
 
       // Get the size of the renderer
       const size = this.renderer.getSize();
@@ -29,17 +106,18 @@ export default class App extends React.Component {
       const x = nativeEvent.x / size.width;
       const y = nativeEvent.y / size.height;
 
+      // Reset earlier transformations
       this.mesh.position.set(0,0,0);
       this.mesh.rotation.set(0,0,0);
       this.mesh.updateMatrix()
 
-      // Invoke the native hit test method
+      // Invoke the native hit test method from ARKit
       const { hitTest } = await AR.performHitTest(
         {
           x: x,
           y: y
         },
-        // Result type from intersecting a horizontal plane estimate, determined for the current frame.
+        // Result type from intersecting a horizontal plane estimate
         AR.HitTestResultTypes.HorizontalPlane
       );
 
@@ -62,11 +140,11 @@ export default class App extends React.Component {
     if( event.nativeEvent.state === State.ACTIVE && this.mesh ) {
       if (event.nativeEvent.rotation > 0.1 || event.nativeEvent.rotation < -0.1) {
         if ( event.nativeEvent.rotation > 1.5) {
-          this.cube.rotateY( -1.5 /30 );
+          this.chair.rotateY( -1.5 /30 );
         } else if ( event.nativeEvent.rotation < -1.5) {
-          this.cube.rotateY( 1.5 /30 );
+          this.chair.rotateY( 1.5 /30 );
         } else {
-          this.cube.rotateY( -event.nativeEvent.rotation /30 );
+          this.chair.rotateY( -event.nativeEvent.rotation /30 );
         }
       }
     }
@@ -74,10 +152,6 @@ export default class App extends React.Component {
 
   _onSingleTap = ({ nativeEvent }) => {
     if (nativeEvent.state === State.ACTIVE) {
-      // console.log(nativeEvent.x);
-      // console.log(nativeEvent.y);
-      console.log("TAPI TAPI");
-
       const x = nativeEvent.x;
       const y = nativeEvent.y;
 
@@ -95,7 +169,8 @@ export default class App extends React.Component {
     }
   };
 
-  
+  //////// HELPER FUNCTIONS FOR GESTURES ///////////
+
   _placeCube = async (x, y) => {
 
     if (!this.renderer) {
@@ -108,14 +183,9 @@ export default class App extends React.Component {
         x: x,
         y: y
       },
-      // Result type from intersecting a horizontal plane estimate, determined for the current frame.
+      // Result type from intersecting a horizontal plane estimate.
       AR.HitTestResultTypes.HorizontalPlane
     );
-
-    // const geometry = new THREE.BoxGeometry( 0.4,0.04, 0.4);
-    // const material = new THREE.MeshPhongMaterial({
-    //     color: 0xe5e5e5,
-    // });
 
     for (let hit of hitTest) {
 
@@ -154,30 +224,25 @@ export default class App extends React.Component {
           loader.setMaterials( materials );
           loader.load( obj.url, ( object ) => {
 
+            // Creates a box around the chair to be able to know the longest side
             var box = new THREE.Box3();
             box.setFromObject( object );
 
             object.rotation.set(-90*0.0174532925,0,0);
 
-            // scale
+            this.chair = new THREE.Group();
+            this.chair.add( object );
+            // Scale the chair so that the Longest side will be 1 meter
+            this.chair.scale.setScalar( 1 / box.getSize().length() );
+            this.chair.position.setY(-0.005); //Correction for the chair model
 
-            this.cube = new THREE.Group();
-            this.cube.add( object );
-            this.cube.scale.setScalar( 1 / box.getSize().length() );
-            // scene.add( this.cube );
-
-            let a:THREE.Mesh = object.children[0];
-            a.castShadow = true;
-
-            // mesh.rotation.z = Math.PI;
-            this.cube.castShadow = true;
+            // The chair should cast shadows
+            let chairMesh:THREE.Mesh = object.children[0];
+            chairMesh.castShadow = true;
 
             this.mesh = new THREE.Object3D();
-            this.mesh.add(this.cube);
-
-            // Add the cube to the scene
+            this.mesh.add(this.chair);
             this.scene.add(this.mesh);
-
             this.mesh.add(this.shadowFloor);
 
             // Disable the matrix auto updating system
@@ -190,17 +255,15 @@ export default class App extends React.Component {
             this.mesh.applyMatrix(matrix);
             this.mesh.updateMatrix();
 
-            console.log("Done");
+            this.scene.add(this.mesh);
+
+            console.log("Done loading asset");
 
           } );
-
         } );
-
       }
-
     } );
     request.send( null );
-
   }
 
   _runHitTest = (x, y) => {
@@ -213,9 +276,40 @@ export default class App extends React.Component {
   };
 
   _onPanEnd = ( event ) => {
-    console.log("end");
-    this.cube.position.setY(0.02);
+    this.chair.position.setY(-0.005);
   }
+
+  //////////////////// RESIZE AND RENDER ////////////////////////////////
+
+  _onResize = ({ x, y, scale, width, height }) => {
+    this.camera.aspect = width / height;
+    this.camera.updateProjectionMatrix();
+    this.renderer.setPixelRatio(scale);
+    this.renderer.setSize(width, height);
+  };
+
+  _onRender = delta => {
+
+    // Update data points and planes
+    this.points.update();
+    this.planes.update();
+
+    // Updates our light based on real light
+    this.arPointLight.update();
+
+    if (this.mesh) {
+      this.shadowFloor.opacity = this.arPointLight.intensity;
+      this.shadowLight.target.position.copy(this.mesh.position);
+      this.shadowLight.position.copy(this.shadowLight.target.position);
+
+      // Place the shadow light source over the object and a bit tilted
+      this.shadowLight.position.x += 0.1;
+      this.shadowLight.position.y += 1;
+      this.shadowLight.position.z += 0.1;
+    }
+
+    this.renderer.render(this.scene, this.camera);
+  };
 
   render() {
     return (
@@ -227,11 +321,14 @@ export default class App extends React.Component {
                 <Animated.View style={styles.wrapper}>
                   <GraphicsView
                     style={styles.container}
-                    onContextCreate={this.onContextCreate}
-                    onRender={this.onRender}
-                    onResize={this.onResize}
+                    onContextCreate={this._onContextCreate}
+                    onRender={this._onRender}
+                    onResize={this._onResize}
+                    // ARKit config - Tracks a device's orientation and position, and detects real-world surfaces, and known images or objects.
                     arTrackingConfiguration={AR.TrackingConfigurations.World}
+                    // Enables an ARKit context
                     isArEnabled
+                    // Renders information related to ARKit the tracking state
                     isArCameraStateEnabled
                   />
                 </Animated.View>
@@ -243,120 +340,9 @@ export default class App extends React.Component {
       
     );
   }
-
-  onContextCreate = async ({ gl, scale: pixelRatio, width, height }) => {
-    AR.setPlaneDetection(AR.PlaneDetectionTypes.Horizontal);
-
-    this.renderer = new ExpoTHREE.Renderer({ gl, width, height, pixelRatio });
-
-    // Enable some realist rendering props: https://threejs.org/docs/#api/renderers/WebGLRenderer.physicallyCorrectLights
-    this.renderer.gammaInput = this.renderer.gammaOutput = true;
-    this.renderer.shadowMap.enabled = true;
-    this.renderer.physicallyCorrectLights = true;
-    this.renderer.toneMapping = THREE.ReinhardToneMapping;
-    // this.renderer.toneMappingExposure = Math.pow(0.68, 5.0); // to allow for very bright scenes.
-
-    this.scene = new THREE.Scene();
-    this.scene.background = new ThreeAR.BackgroundTexture(this.renderer);
-
-    this.camera = new ThreeAR.Camera(width, height, 0.01, 10000);
-
-    // Create ARKit lighting
-    this.arPointLight = new ThreeAR.Light();
-    this.arPointLight.position.y = 2;
-
-    this.scene.add(this.arPointLight);
-    this.shadowLight = this.getShadowLight();
-    this.scene.add(this.shadowLight);
-    this.scene.add(this.shadowLight.target);
-    // this.scene.add(new THREE.DirectionalLightHelper(this.shadowLight));
-
-    this.scene.add(new THREE.AmbientLight(0x404040));
-
-    this.shadowFloor = new ThreeAR.ShadowFloor({
-      width: 1,
-      height: 1,
-      opacity: 0.6,
-    });
-
-    // Create this cool utility function that let's us see all the raw data points.
-    this.points = new ThreeAR.Points();
-    // Add the points to our scene...
-    this.scene.add(this.points);
-
-    // Create this cool utility function that let's us see all the raw data points.
-    this.planes = new ThreeAR.Planes();
-    // Add the planes to our scene...
-    this.scene.add(this.planes);
-    
-
-    this.raycaster = new THREE.Raycaster();
-  };
-
-  onResize = ({ x, y, scale, width, height }) => {
-    this.camera.aspect = width / height;
-    this.camera.updateProjectionMatrix();
-    this.renderer.setPixelRatio(scale);
-    this.renderer.setSize(width, height);
-  };
-
-  onRender = delta => {
-
-    // this.emissiveIntensity = this.intensity / Math.pow( 0.02, 2.0 ); // convert from intensity to irradiance at bulb surface
-
-    // This will make the points get more rawDataPoints from Expo.AR
-    this.points.update();
-    this.planes.update();
-
-    this.arPointLight.update();
-
-    if (this.mesh) {
-      this.shadowFloor.opacity = this.arPointLight.intensity;
-
-      this.shadowLight.target.position.copy(this.mesh.position);
-      this.shadowLight.position.copy(this.shadowLight.target.position);
-      this.shadowLight.position.x += 0.1;
-      this.shadowLight.position.y += 1;
-      this.shadowLight.position.z += 0.1;
-    }
-
-    this.renderer.render(this.scene, this.camera);
-  };
-
-  getShadowLight = () => {
-    let light = new THREE.DirectionalLight(0xffffff, 0.6);
-
-    light.castShadow = true;
-
-    // default is 50
-    const shadowSize = 1;
-    light.shadow.camera.left = -shadowSize;
-    light.shadow.camera.right = shadowSize;
-    light.shadow.camera.top = shadowSize;
-    light.shadow.camera.bottom = -shadowSize;
-    light.shadow.camera.near = 0.001;
-    light.shadow.camera.far = 100;
-    light.shadow.camera.updateProjectionMatrix();
-
-    // default is 512
-    light.shadow.mapSize.width = 512;
-    light.shadow.mapSize.height = light.shadow.mapSize.width;
-
-    return light;
-  };
 }
 
 const styles = StyleSheet.create({
   container: { flex: 1 },
-  footer: {
-    position: 'absolute',
-    bottom: 12,
-    left: 12,
-    right: 12,
-    justifyContent: 'center',
-    flexDirection: 'row',
-  },
-  wrapper: {
-    flex: 1,
-  },
+  wrapper: { flex: 1 }
 });
