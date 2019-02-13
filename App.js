@@ -3,6 +3,8 @@ import ExpoTHREE, { THREE, AR as ThreeAR } from 'expo-three';
 import React from 'react';
 import { Dimensions, StyleSheet, Animated, View } from 'react-native';
 import { View as GraphicsView } from 'expo-graphics';
+import { API_KEY } from './apikey';
+import { MTLLoader, OBJLoader } from 'three-obj-mtl-loader';
 import {
   TapGestureHandler,
   RotationGestureHandler,
@@ -110,45 +112,96 @@ export default class App extends React.Component {
       AR.HitTestResultTypes.HorizontalPlane
     );
 
-    // Create a new zone
-    const geometry = new THREE.BoxGeometry( 0.4,0.04, 0.4);
-    const material = new THREE.MeshPhongMaterial({
-        color: 0xe5e5e5,
-    });
+    // const geometry = new THREE.BoxGeometry( 0.4,0.04, 0.4);
+    // const material = new THREE.MeshPhongMaterial({
+    //     color: 0xe5e5e5,
+    // });
 
     for (let hit of hitTest) {
 
       const { worldTransform } = hit;
-
-
-      this.mesh = new THREE.Object3D();
-
-      console.log("CREATE");
+      this._loadAsset(worldTransform );
         
-      this.cube = new THREE.Mesh(geometry, material);
-      this.cube.position.set(0, 0.02, 0);
-
-      // mesh.rotation.z = Math.PI;
-      this.cube.castShadow = true;
-
-      this.mesh.add(this.cube);
-
-      // Add the cube to the scene
-      this.scene.add(this.mesh);
-
-      this.mesh.add(this.shadowFloor);
-
-      // Disable the matrix auto updating system
-      this.mesh.matrixAutoUpdate = false;
-
-      const matrix = new THREE.Matrix4();
-      matrix.fromArray(worldTransform);
-
-      // Manually update the matrix
-      this.mesh.applyMatrix(matrix);
-      this.mesh.updateMatrix();
     }
   };
+
+  _loadAsset = (worldTransform ) => {
+
+    var url = `https://poly.googleapis.com/v1/assets/7Jl72KgiRl-/?key=${API_KEY}`;
+
+    var request = new XMLHttpRequest();
+    request.open( 'GET', url, true );
+    request.addEventListener( 'load', ( event ) => {
+
+      var asset = JSON.parse( event.target.response );
+
+      var format = asset.formats.find( format => { return format.formatType === 'OBJ'; } );
+
+      if ( format !== undefined ) {
+
+        var obj = format.root;
+        var mtl = format.resources.find( resource => { return resource.url.endsWith( 'mtl' ) } );
+
+        var path = obj.url.slice( 0, obj.url.indexOf( obj.relativePath ) );
+
+        var loader = new THREE.MTLLoader();
+        loader.setCrossOrigin( true );
+        loader.setMaterialOptions( { ignoreZeroRGBs: true } );
+        loader.setTexturePath( path );
+        loader.load( mtl.url, ( materials ) => {
+
+          var loader = new THREE.OBJLoader();
+          loader.setMaterials( materials );
+          loader.load( obj.url, ( object ) => {
+
+            var box = new THREE.Box3();
+            box.setFromObject( object );
+
+            object.rotation.set(-90*0.0174532925,0,0);
+
+            // scale
+
+            this.cube = new THREE.Group();
+            this.cube.add( object );
+            this.cube.scale.setScalar( 1 / box.getSize().length() );
+            // scene.add( this.cube );
+
+            let a:THREE.Mesh = object.children[0];
+            a.castShadow = true;
+
+            // mesh.rotation.z = Math.PI;
+            this.cube.castShadow = true;
+
+            this.mesh = new THREE.Object3D();
+            this.mesh.add(this.cube);
+
+            // Add the cube to the scene
+            this.scene.add(this.mesh);
+
+            this.mesh.add(this.shadowFloor);
+
+            // Disable the matrix auto updating system
+            this.mesh.matrixAutoUpdate = false;
+
+            const matrix = new THREE.Matrix4();
+            matrix.fromArray(worldTransform);
+
+            // Manually update the matrix
+            this.mesh.applyMatrix(matrix);
+            this.mesh.updateMatrix();
+
+            console.log("Done");
+
+          } );
+
+        } );
+
+      }
+
+    } );
+    request.send( null );
+
+  }
 
   _runHitTest = (x, y) => {
     const touch = {x: x, y: y};
