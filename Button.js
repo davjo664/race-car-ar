@@ -40,10 +40,10 @@ export default class Button extends Component {
       <LongPressGestureHandler
           onHandlerStateChange={({ nativeEvent }) => {
             if (nativeEvent.state === State.ACTIVE) {
-              console.log("LONG");
+              // console.log("LONG");
               this.props.handlePress();
             } else {
-              console.log("END LONG");
+              // console.log("END LONG");
               this.props.handleRelease();
             }
           }}

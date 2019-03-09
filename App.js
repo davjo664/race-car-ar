@@ -18,6 +18,30 @@ import * as CANNON from 'cannon';
 import { Demo } from './cannon.demo';
 console.disableYellowBox = true;
 
+/**
+ * Set the steering value of a wheel.
+ * @method setSteeringValue
+ * @param {number} value
+ * @param {integer} wheelIndex
+ * @todo check coordinateSystem
+ */
+CANNON.RigidVehicle.prototype.setSteeringValue = function(value, wheelIndex){
+  console.log("STEERSSS");
+  // Set angle of the hinge axis
+  var axis = this.wheelAxes[wheelIndex];
+
+  var c = Math.cos(value),
+      s = Math.sin(value),
+      x = axis.x,
+      y = axis.z;
+  this.constraints[wheelIndex].axisA.set(
+      c*x -s*y,
+      0,
+      s*x +c*y
+  );
+};
+
+
 const { width, height } = Dimensions.get('window');
 
 export default class App extends React.Component {
@@ -117,11 +141,11 @@ export default class App extends React.Component {
     // We must add the contact materials to the world
     this.world.addContactMaterial(wheelGroundContactMaterial);
     var chassisShape;
-    var centerOfMassAdjust = new CANNON.Vec3(0, -0.0625, 0);
-    chassisShape = new CANNON.Box(new CANNON.Vec3(0.5, 0.125, 0.20));
+    var centerOfMassAdjust = new CANNON.Vec3(0, 0, 0);
+    chassisShape = new CANNON.Box(new CANNON.Vec3(0.5, 0.01, 0.20));
     var chassisBody = new CANNON.Body({ mass: 100 });
     chassisBody.addShape(chassisShape, centerOfMassAdjust);
-    chassisBody.position.set(0, 0, 0);
+    chassisBody.position.set(0, 50, 0); //PLACE CAR
 
     // Create the vehicle
     this.wheelBodies = [];
@@ -130,13 +154,14 @@ export default class App extends React.Component {
         chassisBody: chassisBody
     });
     var axisWidth = 0.6;
-    var wheelShape = new CANNON.Sphere(0.125);
+    // var wheelShape = new CANNON.Sphere(0.125);
+    var wheelShape = new CANNON.Cylinder(0.125, 0.125, 0.125 / 2, 20);
     var down = new CANNON.Vec3(0, -1, 0);
     var wheelBody = new CANNON.Body({ mass: mass, material: wheelMaterial });
     wheelBody.addShape(wheelShape);
     this.vehicle.addWheel({
         body: wheelBody,
-        position: new CANNON.Vec3(0.5, 0, axisWidth/2).vadd(centerOfMassAdjust),
+        position: new CANNON.Vec3(0.5, -0.1, axisWidth/2).vadd(centerOfMassAdjust),
         axis: new CANNON.Vec3(0, 0, 1),
         direction: down
     });
@@ -145,16 +170,7 @@ export default class App extends React.Component {
     wheelBody.addShape(wheelShape);
     this.vehicle.addWheel({
         body: wheelBody,
-        position: new CANNON.Vec3(0.5, 0, -axisWidth/2).vadd(centerOfMassAdjust),
-        axis: new CANNON.Vec3(0, 0, -1),
-        direction: down
-    });
-    this.wheelBodies.push(wheelBody);
-    var wheelBody = new CANNON.Body({ mass: mass, material: wheelMaterial });
-    wheelBody.addShape(wheelShape);
-    this.vehicle.addWheel({
-        body: wheelBody,
-        position: new CANNON.Vec3(-0.5, 0, axisWidth/2).vadd(centerOfMassAdjust),
+        position: new CANNON.Vec3(0.5, -0.1, -axisWidth/2).vadd(centerOfMassAdjust),
         axis: new CANNON.Vec3(0, 0, 1),
         direction: down
     });
@@ -163,8 +179,17 @@ export default class App extends React.Component {
     wheelBody.addShape(wheelShape);
     this.vehicle.addWheel({
         body: wheelBody,
-        position: new CANNON.Vec3(-0.5, 0, -axisWidth/2).vadd(centerOfMassAdjust),
-        axis: new CANNON.Vec3(0, 0, -1),
+        position: new CANNON.Vec3(-0.5, -0.1, axisWidth/2).vadd(centerOfMassAdjust),
+        axis: new CANNON.Vec3(0, 0, 1),
+        direction: down
+    });
+    this.wheelBodies.push(wheelBody);
+    var wheelBody = new CANNON.Body({ mass: mass, material: wheelMaterial });
+    wheelBody.addShape(wheelShape);
+    this.vehicle.addWheel({
+        body: wheelBody,
+        position: new CANNON.Vec3(-0.5, -0.1, -axisWidth/2).vadd(centerOfMassAdjust),
+        axis: new CANNON.Vec3(0, 0, 1),
         direction: down
     });
     this.wheelBodies.push(wheelBody);
@@ -565,41 +590,6 @@ export default class App extends React.Component {
     this.renderer.render(this.scene, this.camera);
   };
 
-
-  handlePressIn = () => {
-    console.log("PRESS IN");
-      this.vehicle.setWheelForce(-10, 1);
-      this.vehicle.setWheelForce(-10, 3);
-  }
-  handlePressOut = () => {
-    console.log("PRESS OUT");
-    this.vehicle.setWheelForce(0, 0);
-    this.vehicle.setWheelForce(0, 1);
-    this.vehicle.setWheelForce(0, 2);
-    this.vehicle.setWheelForce(0, 3);
-    
-  }
-
-  handleSteerLeftIn = () => {
-    console.log("STEER LEFT");
-    this.vehicle.setSteeringValue(10, 1);
-    this.vehicle.setSteeringValue(10, 3);
-  }
-  handleSteerLeftOut = () => {
-    
-  }
-
-  handleSteerRightIn = () => {
-    console.log("STEER RIGHT");
-    this.vehicle.setSteeringValue(-10, 1);
-    this.vehicle.setSteeringValue(-10, 3);
-  }
-  handleSteerRightOut = () => {
-    
-  }
-  leftTouchPosition = { x: 100, y: 100 };
-  leftTouchStart = { x: 200, y: 200 };
-  leftTouchForce = 5;
   render() {
     return (
       <PanGestureHandler onGestureEvent={this._onPanGestureEvent} onHandlerStateChange={this._onPanEnd}>
@@ -608,27 +598,7 @@ export default class App extends React.Component {
             <Animated.View style={styles.wrapper}>
               <TapGestureHandler onHandlerStateChange={this._onSingleTap}>
                 <Animated.View style={styles.container}>
-                <Button container={{
-                    flex: 1, 
-                    flexDirection: 'row',
-                    position: 'absolute',
-                    bottom: 0,
-                    right: 0
-                  }}
-                  label={"GO"}
-                  handlePress={()=>{
-                    console.log("GO")
-                    this.vehicle.setWheelForce(-10, 1);
-                    this.vehicle.setWheelForce(-10, 3);
-                  }}
-                  handleRelease={()=>{
-                    this.vehicle.setWheelForce(0, 0);
-                    this.vehicle.setWheelForce(0, 1);
-                    this.vehicle.setWheelForce(0, 2);
-                    this.vehicle.setWheelForce(0, 3);
-                  }}
-                  />
-                                <Button container={{
+                  <Button container={{
                     flex: 1, 
                     flexDirection: 'row',
                     position: 'absolute',
@@ -638,12 +608,51 @@ export default class App extends React.Component {
                   label={"LEFT"}
                   handlePress={()=>{
                     console.log("LEFT")
-                    this.vehicle.setSteeringValue(10, 1);
-                    this.vehicle.setSteeringValue(10, 3);
+                    // this.vehicle.setSteeringValue(-0.1, 0); //LEFT REAR
+                    //this.vehicle.setSteeringValue(10, 1); //RIGHT REAR
+                    this.vehicle.setSteeringValue(-0.5, 2); //LEFT FRONT
+                    this.vehicle.setSteeringValue(-0.5, 3); // RIGHT FRONT
+
+                    // this.vehicle.setWheelForce(0, 2);
+                    // this.vehicle.setWheelForce(200, 3);
                   }}
                   handleRelease={()=>{
-                    this.vehicle.setSteeringValue(0, 1);
+                    console.log("LEFT END")
+                    this.vehicle.setSteeringValue(0, 2);
                     this.vehicle.setSteeringValue(0, 3);
+                    // this.vehicle.setSteeringValue(0, 1);
+                    // this.vehicle.setSteeringValue(0, 2);
+                    // this.vehicle.setSteeringValue(0, 3);
+                    // this.vehicle.setSteeringValue(0, 0);
+                  }}
+                  />
+
+                  <Button container={{
+                    flex: 1, 
+                    flexDirection: 'row',
+                    position: 'absolute',
+                    bottom: 0,
+                    right: 0
+                  }}
+                  label={"GO"}
+                  handlePress={()=>{
+                    console.log("GO")
+                    // this.vehicle.setWheelForce(1, 0);
+                    // this.vehicle.setWheelForce(1, 1);
+                    this.vehicle.setWheelForce(100, 2);
+                    this.vehicle.setWheelForce(100, 3);
+                    // this.vehicle.setWheelForce(50, 3);
+                  }}
+                  handleRelease={()=>{
+                    console.log("GO END")
+                    this.vehicle.setWheelForce(0, 2);
+                    this.vehicle.setWheelForce(0, 3);
+                    // this.vehicle.setMotorSpeed(0,0);
+                    // this.vehicle.setMotorSpeed(0,2);
+                    // this.vehicle.setWheelForce(0, 0);
+                    // this.vehicle.setWheelForce(0, 1);
+                    // this.vehicle.setWheelForce(0, 2);
+                    // this.vehicle.setWheelForce(0, 3);
                   }}
                   />
                   <GraphicsView
