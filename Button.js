@@ -47,15 +47,11 @@ export default class Button extends Component {
               this.props.handleRelease();
             }
           }}
-          minDurationMs={500}>
-        <Animated.View style={this.props.container}>
-          <View style={this.props.container}>
-                
-                
-                <View style={styles.button}
-                >
-                  <Text > {this.props.label} </Text>
-                </View>
+          minDurationMs={100}>
+        <Animated.View style={{flex: 1}}>
+          <View style={styles.button}
+          >
+            <Text style={{color:'white'}}> {this.props.label} </Text>
           </View>
         </Animated.View>
       </LongPressGestureHandler>
@@ -64,18 +60,11 @@ export default class Button extends Component {
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1, 
-    flexDirection: 'row',
-    position: 'absolute',
-    bottom: 0,
-    right: 0
-  },
   button: {
-    width:50,
-    height: 50,
+    flex:1,
+    height: 80,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: 'rgba(52, 52, 52, 0.1)'
+    backgroundColor: 'rgba(52, 52, 52, 0.5)'
   }
 })

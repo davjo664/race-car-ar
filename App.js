@@ -597,14 +597,16 @@ export default class App extends React.Component {
           <RotationGestureHandler onGestureEvent={this._onRotateGestureEvent}>
             <Animated.View style={styles.wrapper}>
               <TapGestureHandler onHandlerStateChange={this._onSingleTap}>
-                <Animated.View style={styles.container}>
-                  <Button container={{
-                    flex: 1, 
-                    flexDirection: 'row',
-                    position: 'absolute',
-                    bottom: 0,
-                    left: 0
-                  }}
+                <Animated.View style={styles.wrapper}>
+                <View style={{
+    flex: 1, 
+    flexDirection: 'row',
+    position: 'absolute',
+    justifyContent: 'space-between',
+    bottom: 20,
+    left: 0
+  }}>
+                  <Button 
                   label={"LEFT"}
                   handlePress={()=>{
                     console.log("LEFT")
@@ -613,48 +615,45 @@ export default class App extends React.Component {
                     this.vehicle.setSteeringValue(-0.5, 2); //LEFT FRONT
                     this.vehicle.setSteeringValue(-0.5, 3); // RIGHT FRONT
 
-                    // this.vehicle.setWheelForce(0, 2);
-                    // this.vehicle.setWheelForce(200, 3);
                   }}
                   handleRelease={()=>{
                     console.log("LEFT END")
                     this.vehicle.setSteeringValue(0, 2);
                     this.vehicle.setSteeringValue(0, 3);
-                    // this.vehicle.setSteeringValue(0, 1);
-                    // this.vehicle.setSteeringValue(0, 2);
-                    // this.vehicle.setSteeringValue(0, 3);
-                    // this.vehicle.setSteeringValue(0, 0);
                   }}
                   />
 
-                  <Button container={{
-                    flex: 1, 
-                    flexDirection: 'row',
-                    position: 'absolute',
-                    bottom: 0,
-                    right: 0
+                  <Button 
+                  label={"RIGHT"}
+                  handlePress={()=>{
+                    console.log("RIGHT")
+                    // this.vehicle.setSteeringValue(-0.1, 0); //LEFT REAR
+                    //this.vehicle.setSteeringValue(10, 1); //RIGHT REAR
+                    this.vehicle.setSteeringValue(0.5, 2); //LEFT FRONT
+                    this.vehicle.setSteeringValue(0.5, 3); // RIGHT FRONT
+
                   }}
+                  handleRelease={()=>{
+                    console.log("RIGHT END")
+                    this.vehicle.setSteeringValue(0, 2);
+                    this.vehicle.setSteeringValue(0, 3);
+                  }}
+                  />
+
+                  <Button 
                   label={"GO"}
                   handlePress={()=>{
                     console.log("GO")
-                    // this.vehicle.setWheelForce(1, 0);
-                    // this.vehicle.setWheelForce(1, 1);
                     this.vehicle.setWheelForce(100, 2);
                     this.vehicle.setWheelForce(100, 3);
-                    // this.vehicle.setWheelForce(50, 3);
                   }}
                   handleRelease={()=>{
                     console.log("GO END")
                     this.vehicle.setWheelForce(0, 2);
                     this.vehicle.setWheelForce(0, 3);
-                    // this.vehicle.setMotorSpeed(0,0);
-                    // this.vehicle.setMotorSpeed(0,2);
-                    // this.vehicle.setWheelForce(0, 0);
-                    // this.vehicle.setWheelForce(0, 1);
-                    // this.vehicle.setWheelForce(0, 2);
-                    // this.vehicle.setWheelForce(0, 3);
                   }}
                   />
+                  </View>
                   <GraphicsView
                     style={styles.container}
                     onContextCreate={this._onContextCreate}
