@@ -26,7 +26,7 @@ console.disableYellowBox = true;
  * @todo check coordinateSystem
  */
 CANNON.RigidVehicle.prototype.setSteeringValue = function(value, wheelIndex){
-  console.log("STEERSSS");
+  // console.log("STEERSSS");
   // Set angle of the hinge axis
   var axis = this.wheelAxes[wheelIndex];
 
@@ -77,15 +77,15 @@ export default class App extends React.Component {
     this.shadowLight = this._getShadowLight();
     this.scene.add(this.shadowLight);
     this.scene.add(this.shadowLight.target);
-    // this.scene.add(new THREE.DirectionalLightHelper(this.shadowLight));
+    this.scene.add(new THREE.DirectionalLightHelper(this.shadowLight));
 
     
     // this.scene.add(new THREE.AmbientLight(0x404040));
 
     // A transparent plane that extends THREE.Mesh and receives shadows from other meshes.
     this.shadowFloor = new ThreeAR.ShadowFloor({
-      width: 1,
-      height: 1,
+      width: 10,
+      height: 10,
       opacity: 0.6,
     });
 
@@ -100,41 +100,44 @@ export default class App extends React.Component {
     // Ray caster for hit test
     this.raycaster = new THREE.Raycaster();
 
+    this.demo = new Demo();
     // this.world = new CANNON.World();
-    // this.world.gravity.set(0,-10,0);
-    // this.world.broadphase = new CANNON.NaiveBroadphase();
-    // this.world.solver.iterations = 10;
-    var geometry = new THREE.BoxGeometry( 0.4, 0.4, 0.4 );
-    var material = new THREE.MeshBasicMaterial( { color: 0xff0000, wireframe: false } );
-    this.objects = [];
-
-    var demo = new Demo();
-    // this.world = new CANNON.World();
-    this.world = demo.getWorld();
+    this.world = this.demo.getWorld();
     this.world.broadphase = new CANNON.SAPBroadphase(this.world);
     this.world.gravity.set(0, -10, 0);
     this.world.defaultContactMaterial.friction = 0;
 
+    // this._initGround(0, -0.7, 0);
+    // this._initCar(); 
+    // this._initBoxes();
+  };
+
+  _initGround = (x, y, z) => {
+
     // ground
-    const groundMaterial = new CANNON.Material();
+    this.groundMaterial = new CANNON.Material();
     const groundBody = new CANNON.Body({
       mass: 0,
       shape: new CANNON.Plane(),
-      material: groundMaterial,
-      position: new CANNON.Vec3(0,-0.7, 0),
+      material: this.groundMaterial,
+      position: new CANNON.Vec3(x,y,z),
     });
     groundBody.quaternion.setFromAxisAngle(new CANNON.Vec3(1,0,0), -Math.PI/2);
     this.world.add(groundBody);
 
-    this.mesh3 = new THREE.Mesh( new THREE.BoxGeometry( 5, 0.05, 5 ), new THREE.MeshBasicMaterial( { color: 0x0000ff, wireframe: false } ) );
-    this.mesh3.position.set(0,-0.7, 0);
-    this.scene.add( this.mesh3 );
+    this.mesh3 = new THREE.Mesh( new THREE.BoxGeometry( 5, 0.001, 5 ), new THREE.MeshBasicMaterial( { color: 0x0000ff, wireframe: false } ) );
+    this.mesh3.position.set(x,y, z);
+    // this.scene.add( this.mesh3 );
+
+  }
+
+  _initCar = (x,y,z) => {
 
     // Car
-    var mass = 5;
+    var mass = 1;
     var wheelMaterial = new CANNON.Material("wheelMaterial");
-    var wheelGroundContactMaterial = new CANNON.ContactMaterial(wheelMaterial, groundMaterial, {
-        friction: 0.3,
+    var wheelGroundContactMaterial = new CANNON.ContactMaterial(wheelMaterial, this.groundMaterial, {
+        friction: 0.8,
         restitution: 0,
         contactEquationStiffness: 1000
     });
@@ -142,10 +145,10 @@ export default class App extends React.Component {
     this.world.addContactMaterial(wheelGroundContactMaterial);
     var chassisShape;
     var centerOfMassAdjust = new CANNON.Vec3(0, 0, 0);
-    chassisShape = new CANNON.Box(new CANNON.Vec3(0.5, 0.01, 0.20));
-    var chassisBody = new CANNON.Body({ mass: 100 });
+    chassisShape = new CANNON.Box(new CANNON.Vec3(0.25/4, 0.08/4, 0.20/4));
+    var chassisBody = new CANNON.Body({ mass: 1, material: wheelMaterial });
     chassisBody.addShape(chassisShape, centerOfMassAdjust);
-    chassisBody.position.set(0, 50, 0); //PLACE CAR
+    chassisBody.position.set(x, y, z); //PLACE CAR
 
     // Create the vehicle
     this.wheelBodies = [];
@@ -153,15 +156,15 @@ export default class App extends React.Component {
     this.vehicle = new CANNON.RigidVehicle({
         chassisBody: chassisBody
     });
-    var axisWidth = 0.6;
+    var axisWidth = 0.5/4;
     // var wheelShape = new CANNON.Sphere(0.125);
-    var wheelShape = new CANNON.Cylinder(0.125, 0.125, 0.125 / 2, 20);
+    var wheelShape = new CANNON.Cylinder(0.09/4, 0.09/4, 0.09/4, 20);
     var down = new CANNON.Vec3(0, -1, 0);
     var wheelBody = new CANNON.Body({ mass: mass, material: wheelMaterial });
     wheelBody.addShape(wheelShape);
     this.vehicle.addWheel({
         body: wheelBody,
-        position: new CANNON.Vec3(0.5, -0.1, axisWidth/2).vadd(centerOfMassAdjust),
+        position: new CANNON.Vec3(0.25/4, -0.08/4, axisWidth/2).vadd(centerOfMassAdjust),
         axis: new CANNON.Vec3(0, 0, 1),
         direction: down
     });
@@ -170,7 +173,7 @@ export default class App extends React.Component {
     wheelBody.addShape(wheelShape);
     this.vehicle.addWheel({
         body: wheelBody,
-        position: new CANNON.Vec3(0.5, -0.1, -axisWidth/2).vadd(centerOfMassAdjust),
+        position: new CANNON.Vec3(0.25/4, -0.08/4, -axisWidth/2).vadd(centerOfMassAdjust),
         axis: new CANNON.Vec3(0, 0, 1),
         direction: down
     });
@@ -179,7 +182,7 @@ export default class App extends React.Component {
     wheelBody.addShape(wheelShape);
     this.vehicle.addWheel({
         body: wheelBody,
-        position: new CANNON.Vec3(-0.5, -0.1, axisWidth/2).vadd(centerOfMassAdjust),
+        position: new CANNON.Vec3(-0.25/4, -0.08/4, axisWidth/2).vadd(centerOfMassAdjust),
         axis: new CANNON.Vec3(0, 0, 1),
         direction: down
     });
@@ -188,7 +191,7 @@ export default class App extends React.Component {
     wheelBody.addShape(wheelShape);
     this.vehicle.addWheel({
         body: wheelBody,
-        position: new CANNON.Vec3(-0.5, -0.1, -axisWidth/2).vadd(centerOfMassAdjust),
+        position: new CANNON.Vec3(-0.25/4, -0.08/4, -axisWidth/2).vadd(centerOfMassAdjust),
         axis: new CANNON.Vec3(0, 0, 1),
         direction: down
     });
@@ -200,136 +203,47 @@ export default class App extends React.Component {
     // Constrain wheels
     var constraints = [];
     // Add visuals
-    this.chassiMesh = demo.addVisual(this.vehicle.chassisBody);
+    this.chassiMesh = this.demo.addVisual(this.vehicle.chassisBody);
+    this.chassiMesh.castShadow = true;
     this.chassiBody = this.vehicle.chassisBody;
     this.scene.add(this.chassiMesh);
     for(var i=0; i<this.vehicle.wheelBodies.length; i++){
-        var mesh = demo.addVisual(this.vehicle.wheelBodies[i]);
+        var mesh = this.demo.addVisual(this.vehicle.wheelBodies[i]);
+        mesh.castShadow = true;
         this.wheelMeshes.push(mesh);
         this.scene.add(mesh);
     }
     this.vehicle.addToWorld(this.world);
 
-    // var wheelMaterial = new CANNON.Material("wheelMaterial");
-    // var wheelGroundContactMaterial = new CANNON.ContactMaterial(wheelMaterial, groundMaterial, {
-    //     friction: 0.3,
-    //     restitution: 0,
-    //     contactEquationStiffness: 1000
-    // });
+  }
 
-    // // We must add the contact materials to the world
-    // this.world.addContactMaterial(wheelGroundContactMaterial);
-
-    // var chassiShape;
-    // chassiShape = new CANNON.Box(new CANNON.Vec3(0.5, 0.25,0.125));
-    // this.chassiBody = new CANNON.Body({ mass: 150 });
-    // this.chassiBody.addShape(chassiShape);
-    // this.chassiBody.position.set(0, 6, 0);
-    // // this.chassiBody.angularVelocity.set(0, 0.5, 0);
-    // // this.chassiMesh = new THREE.Mesh( new THREE.BoxGeometry( 1, 0.5, 0.25 ), new THREE.MeshBasicMaterial( { color: 0x00ff00, wireframe: false } ) );
-    // // this.scene.add( this.chassiMesh );
-    // this.chassiMesh = demo.addVisual(this.chassiBody);
-    // // this.scene.add(this.chassiMesh);
-
-    // var options = {
-    //     radius: 0.125,
-    //     directionLocal: new CANNON.Vec3(1, 0, 0),
-    //     suspensionStiffness: 30,
-    //     suspensionRestLength: 0.3,
-    //     frictionSlip: 5,
-    //     dampingRelaxation: 2.3,
-    //     dampingCompression: 4.4,
-    //     maxSuspensionForce: 100000,
-    //     rollInfluence:  0.01,
-    //     axleLocal: new CANNON.Vec3(0, 1, 0),
-    //     chassisConnectionPointLocal: new CANNON.Vec3(1, 0, 1),
-    //     maxSuspensionTravel: 0.3,
-    //     customSlidingRotationalSpeed: -30,
-    //     useCustomSlidingRotationalSpeed: true
-    // };
-
-    // // Create the vehicle
-    // vehicle = new CANNON.RaycastVehicle({
-    //     chassisBody: this.chassiBody,
-    // });
-
-    // options.chassisConnectionPointLocal.set(0.25, 0.25, 0);
-    // vehicle.addWheel(options);
-
-    // options.chassisConnectionPointLocal.set(0.25, -0.25, 0);
-    // vehicle.addWheel(options);
-
-    // options.chassisConnectionPointLocal.set(-0.25, 0.25, 0);
-    // vehicle.addWheel(options);
-
-    // options.chassisConnectionPointLocal.set(-0.25, -0.25, 0);
-    // vehicle.addWheel(options);
-
-    // vehicle.addToWorld(this.world);
-
-    // this.wheelBodies = [];
-    // this.wheelMeshes = [];
-    // for(var i=0; i<vehicle.wheelInfos.length; i++){
-    //     var wheel = vehicle.wheelInfos[i];
-    //     var cylinderShape = new CANNON.Cylinder(wheel.radius, wheel.radius, wheel.radius / 2, 20);
-    //     var wheelBody = new CANNON.Body({
-    //         mass: 0
-    //     });
-    //     wheelBody.type = CANNON.Body.KINEMATIC;
-    //     wheelBody.collisionFilterGroup = 0; // turn off collisions
-    //     var q = new CANNON.Quaternion();
-    //     q.setFromAxisAngle(new CANNON.Vec3(1, 0, 0), Math.PI / 2);
-    //     wheelBody.addShape(cylinderShape, new CANNON.Vec3(), q);
-    //     this.wheelBodies.push(wheelBody);
-    //     // this.wheelMesh = new THREE.Mesh( new THREE.BoxGeometry( 1, 0.5, 0.25 ), new THREE.MeshBasicMaterial( { color: 0x00ff00, wireframe: false } ) );
-    //     // this.scene.add( this.chassiMesh );
-    //     // demo.addVisual(wheelBody);
-    //     var wheelMesh = demo.addVisual(wheelBody);
-    //     this.wheelMeshes.push(wheelMesh);
-    //     this.scene.add(wheelMesh);
-    //     this.world.addBody(wheelBody);
-    // }
-
-      // Update wheels
-      this.world.addEventListener('postStep', () => {
-        // for (var i = 0; i < vehicle.wheelInfos.length; i++) {
-        //     vehicle.updateWheelTransform(i);
-        //     var t = vehicle.wheelInfos[i].worldTransform;
-        //     var wheelBody = this.wheelBodies[i];
-        //     wheelBody.position.copy(t.position);
-        //     wheelBody.quaternion.copy(t.quaternion);
-        // }
-        // // console.log("poststep");
-        // vehicle.applyEngineForce(-1, 2);
-        // this.vehicle.setSteeringValue(10, 1);
-        // this.vehicle.setSteeringValue(10, 3);
-        // this.vehicle.setWheelForce(-10, 1);
-        // this.vehicle.setWheelForce(-10, 3);
-    });
-
+  _initBoxes = () => {
+    
     // ball
-    // const ballPhysicsMaterial = new CANNON.Material();
-    // for (let i = 0; i < 5; ++i) {
-    //   const ball = {}
-    //   // ball.mesh = new THREE.Mesh( geometry, material );
-    //   // this.scene.add(ball.mesh);
-    //   ball.body = new CANNON.Body({
-    //     mass: 2,
-    //     shape: new CANNON.Box(new CANNON.Vec3(0.2,0.2,0.2)),
-    //     material: ballPhysicsMaterial,
-    //     position: new CANNON.Vec3(Math.random()*0.5, 1, -1 + Math.random()*0.5),
-    //   });
-    //   this.world.add(ball.body);
-    //   ball.mesh = demo.addVisual(ball.body);
-    //   this.scene.add(ball.mesh);
-    //   this.objects.push(ball);
-    // }
-    // this.world.addContactMaterial(new CANNON.ContactMaterial(
-    //   groundMaterial, ballPhysicsMaterial, {
-    //     restitution: 0.7,
-    //     friction: 0.6,
-    //   }));
-  };
+    this.objects = [];
+    const ballPhysicsMaterial = new CANNON.Material();
+    for (let i = 0; i < 5; ++i) {
+      const ball = {}
+      // ball.mesh = new THREE.Mesh( geometry, material );
+      // this.scene.add(ball.mesh);
+      ball.body = new CANNON.Body({
+        mass: 2,
+        shape: new CANNON.Box(new CANNON.Vec3(0.2,0.2,0.2)),
+        material: ballPhysicsMaterial,
+        position: new CANNON.Vec3(Math.random()*0.5, 1, -1 + Math.random()*0.5),
+      });
+      this.world.add(ball.body);
+      ball.mesh = this.demo.addVisual(ball.body);
+      this.scene.add(ball.mesh);
+      this.objects.push(ball);
+    }
+    this.world.addContactMaterial(new CANNON.ContactMaterial(
+      this.groundMaterial, ballPhysicsMaterial, {
+        restitution: 0.7,
+        friction: 0.6,
+      }));
+
+  }
 
   _getShadowLight = () => {
     let light = new THREE.DirectionalLight(0xffffff, 0.2);
@@ -396,7 +310,7 @@ export default class App extends React.Component {
   };
 
   _onRotateGestureEvent = (event) => {
-    // console.log(event.nativeEvent.rotation);
+    console.log(event.nativeEvent.rotation);
     if( event.nativeEvent.state === State.ACTIVE && this.mesh ) {
       if (event.nativeEvent.rotation > 0.1 || event.nativeEvent.rotation < -0.1) {
         if ( event.nativeEvent.rotation > 1.5) {
@@ -451,13 +365,12 @@ export default class App extends React.Component {
 
       const { worldTransform } = hit;
       this._loadAsset(worldTransform );
-        
     }
   };
 
   _loadAsset = (worldTransform ) => {
 
-    var url = `https://poly.googleapis.com/v1/assets/7Jl72KgiRl-/?key=${API_KEY}`;
+    var url = `https://poly.googleapis.com/v1/assets/bESvWAwSMwy/?key=${API_KEY}`;
 
     var request = new XMLHttpRequest();
     request.open( 'GET', url, true );
@@ -488,12 +401,12 @@ export default class App extends React.Component {
             var box = new THREE.Box3();
             box.setFromObject( object );
 
-            object.rotation.set(-90*0.0174532925,0,0);
+            object.rotation.set(0,-90*0.0174532925,0);
 
             this.chair = new THREE.Group();
             this.chair.add( object );
             // Scale the chair so that the Longest side will be 1 meter
-            this.chair.scale.setScalar( 1 / box.getSize().length() );
+            this.chair.scale.setScalar( 4 / box.getSize().length() );
             this.chair.position.setY(-0.005); //Correction for the chair model
 
             // The chair should cast shadows
@@ -516,6 +429,8 @@ export default class App extends React.Component {
             this.mesh.updateMatrix();
 
             this.scene.add(this.mesh);
+            this._initGround(this.mesh.position.x, this.mesh.position.y, this.mesh.position.z);
+            this._initCar(this.mesh.position.x, this.mesh.position.y+10, this.mesh.position.z);
 
             console.log("Done loading asset");
 
@@ -557,28 +472,32 @@ export default class App extends React.Component {
     // update world
     this.world.step(1 / 60);
 
-    // // update objects
-    // this.objects.forEach(({ mesh, body }) => {
-    //   mesh.position.copy(body.position);
-    //   mesh.quaternion.copy(body.quaternion);
-    // });
-
     // update objects
-    for(var i = 0; i < this.wheelBodies.length; i++) {
-      this.wheelMeshes[i].position.copy(this.wheelBodies[i].position);
-      this.wheelMeshes[i].quaternion.copy(this.wheelBodies[i].quaternion);
+    if (this.objects) {
+      this.objects.forEach(({ mesh, body }) => {
+        mesh.position.copy(body.position);
+        mesh.quaternion.copy(body.quaternion);
+      });
     }
 
-    this.chassiMesh.position.copy(this.chassiBody.position);
-    this.chassiMesh.quaternion.copy(this.chassiBody.quaternion);
-    
+    // update objects
+    if (this.wheelBodies) {
+      for(var i = 0; i < this.wheelBodies.length; i++) {
+        this.wheelMeshes[i].position.copy(this.wheelBodies[i].position);
+        this.wheelMeshes[i].quaternion.copy(this.wheelBodies[i].quaternion);
+      }
+    }
+    if (this.chassiMesh) {
+      this.chassiMesh.position.copy(this.chassiBody.position);
+      this.chassiMesh.quaternion.copy(this.chassiBody.quaternion);
+    }
 
     // Updates our light based on real light
     this.arPointLight.update();
 
-    if (this.mesh) {
+    if (this.chassiMesh) {
       this.shadowFloor.opacity = this.arPointLight.intensity;
-      this.shadowLight.target.position.copy(this.mesh.position);
+      this.shadowLight.target.position.copy(this.chassiMesh.position);
       this.shadowLight.position.copy(this.shadowLight.target.position);
 
       // Place the shadow light source over the object and a bit tilted
@@ -599,21 +518,21 @@ export default class App extends React.Component {
               <TapGestureHandler onHandlerStateChange={this._onSingleTap}>
                 <Animated.View style={styles.wrapper}>
                 <View style={{
-    flex: 1, 
-    flexDirection: 'row',
-    position: 'absolute',
-    justifyContent: 'space-between',
-    bottom: 20,
-    left: 0
-  }}>
+                    flex: 1, 
+                    flexDirection: 'row',
+                    position: 'absolute',
+                    justifyContent: 'space-between',
+                    bottom: 20,
+                    left: 0
+                  }}>
                   <Button 
                   label={"LEFT"}
                   handlePress={()=>{
                     console.log("LEFT")
                     // this.vehicle.setSteeringValue(-0.1, 0); //LEFT REAR
                     //this.vehicle.setSteeringValue(10, 1); //RIGHT REAR
-                    this.vehicle.setSteeringValue(-0.5, 2); //LEFT FRONT
-                    this.vehicle.setSteeringValue(-0.5, 3); // RIGHT FRONT
+                    this.vehicle.setSteeringValue(-0.4, 2); //LEFT FRONT
+                    this.vehicle.setSteeringValue(-0.4, 3); // RIGHT FRONT
 
                   }}
                   handleRelease={()=>{
@@ -629,8 +548,8 @@ export default class App extends React.Component {
                     console.log("RIGHT")
                     // this.vehicle.setSteeringValue(-0.1, 0); //LEFT REAR
                     //this.vehicle.setSteeringValue(10, 1); //RIGHT REAR
-                    this.vehicle.setSteeringValue(0.5, 2); //LEFT FRONT
-                    this.vehicle.setSteeringValue(0.5, 3); // RIGHT FRONT
+                    this.vehicle.setSteeringValue(0.4, 2); //LEFT FRONT
+                    this.vehicle.setSteeringValue(0.4, 3); // RIGHT FRONT
 
                   }}
                   handleRelease={()=>{
@@ -644,11 +563,15 @@ export default class App extends React.Component {
                   label={"GO"}
                   handlePress={()=>{
                     console.log("GO")
-                    this.vehicle.setWheelForce(100, 2);
-                    this.vehicle.setWheelForce(100, 3);
+                    this.vehicle.setWheelForce(0.15, 0);
+                    this.vehicle.setWheelForce(0.15, 1);
+                    this.vehicle.setWheelForce(0.15, 2);
+                    this.vehicle.setWheelForce(0.15, 3);
                   }}
                   handleRelease={()=>{
                     console.log("GO END")
+                    this.vehicle.setWheelForce(0, 0);
+                    this.vehicle.setWheelForce(0, 1);
                     this.vehicle.setWheelForce(0, 2);
                     this.vehicle.setWheelForce(0, 3);
                   }}
