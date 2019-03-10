@@ -105,7 +105,7 @@ export default class App extends React.Component {
     this.world = this.demo.getWorld();
     this.world.broadphase = new CANNON.NaiveBroadphase();
     this.world.gravity.set(0, -10, 0);
-    this.world.solver.iterations = 20;
+    this.world.solver.iterations = 30;
     this.world.defaultContactMaterial.friction = 0;
 
     this.objects = [];
@@ -128,8 +128,8 @@ export default class App extends React.Component {
     groundBody.quaternion.setFromAxisAngle(new CANNON.Vec3(1,0,0), -Math.PI/2);
     this.world.add(groundBody);
 
-    this.mesh3 = new THREE.Mesh( new THREE.BoxGeometry( 5, 0.001, 5 ), new THREE.MeshBasicMaterial( { color: 0x0000ff, wireframe: false } ) );
-    this.mesh3.position.set(x,y, z);
+    // this.mesh3 = new THREE.Mesh( new THREE.BoxGeometry( 5, 0.001, 5 ), new THREE.MeshBasicMaterial( { color: 0x000000, wireframe: false } ) );
+    // this.mesh3.position.set(x,y, z);
     // this.scene.add( this.mesh3 );
 
   }
@@ -149,7 +149,7 @@ export default class App extends React.Component {
     var chassisShape;
     var centerOfMassAdjust = new CANNON.Vec3(0, 0, 0);
     chassisShape = new CANNON.Box(new CANNON.Vec3(0.25/4, 0.08/4, 0.20/4));
-    var chassisBody = new CANNON.Body({ mass: 1, material: this.wheelMaterial });
+    var chassisBody = new CANNON.Body({ mass: 10, material: this.wheelMaterial });
     chassisBody.addShape(chassisShape, centerOfMassAdjust);
     chassisBody.position.set(x, y, z); //PLACE CAR
 
@@ -319,19 +319,24 @@ export default class App extends React.Component {
   };
 
   _onRotateGestureEvent = (event) => {
-    this.chassiBody
-    console.log(event.nativeEvent.rotation);
-    if( event.nativeEvent.state === State.ACTIVE && this.mesh ) {
+    if( event.nativeEvent.state === State.ACTIVE ) {
       if (event.nativeEvent.rotation > 0.1 || event.nativeEvent.rotation < -0.1) {
         if ( event.nativeEvent.rotation > 1.5) {
           this.chair.rotateY( -1.5 /30 );
         } else if ( event.nativeEvent.rotation < -1.5) {
           this.chair.rotateY( 1.5 /30 );
         } else {
+          if (!this.objects) {
           this.chair.rotateY( -event.nativeEvent.rotation /30 );
+          } else {
+            var obj = this.objects[this.objects.length-1];
+            obj.mesh.rotateX( -event.nativeEvent.rotation /30 );
+            obj.mesh.rotateZ( -event.nativeEvent.rotation /30 );
+            obj.body.quaternion.copy(obj.mesh.quaternion);
         }
       }
     }
+  }
   }
 
   _onSingleTap = ({ nativeEvent }) => {
@@ -377,66 +382,17 @@ export default class App extends React.Component {
       if (!this.mesh) {
         this._loadAsset(worldTransform );
       } else {
-        console.log("MM");
-        // var mesh = new THREE.Object3D();
-        // mesh.matrixAutoUpdate = false;
-
-        // const matrix = new THREE.Matrix4();
-        // matrix.fromArray(worldTransform);
-
-        // // Manually update the matrix
-        // mesh.applyMatrix(this.camera.matrix);
-        // mesh.updateMatrix();
-
         var vec = new THREE.Vector3();
         this.camera.getWorldPosition(vec);
-
-
         
         const ballPhysicsMaterial = new CANNON.Material();
         const ball = {}
-        // ball.mesh = new THREE.Mesh( geometry, material );
-        // this.scene.add(ball.mesh);
         console.log(vec)
-        // ball.body = new CANNON.Body({
-        //   mass: 0.3,
-        //   shape: new CANNON.Box(new CANNON.Vec3(0.04,0.04,0.04)),
-        //   material: ballPhysicsMaterial,
-        //   position: new CANNON.Vec3(vec.x, vec.y, vec.z),
-        // });
-
-        // ConvexPolyhedron tetra shape
-        var verts = [new CANNON.Vec3(0,0,0),
-          new CANNON.Vec3(0,0.1,0),
-          new CANNON.Vec3(0,0.1,0.5),
-          new CANNON.Vec3(0,0,0.5),
-          new CANNON.Vec3(0.3,0,0.5),
-          new CANNON.Vec3(0.3,0,0)
-         ];
-          var offset = 0;
-          for(var i=0; i<verts.length; i++){
-          var v = verts[i];
-          v.x += offset;
-          v.y += offset;
-          v.z += offset;
-          }
-          var polyhedronShape = new CANNON.ConvexPolyhedron(verts,
-                                          [
-                                              [0,1,5], // -x
-                                              [0,2,1], // -x
-                                              [0,3,2], // -x
-                                              [0,3,5], // -x
-                                              [5,3,4], // -x
-                                              [2,3,4], // -x
-                                              [5,2,4], // -x
-                                              [5,1,2], // -x
-                                          ]);
           ball.body = new CANNON.Body({ 
-            position: new CANNON.Vec3(vec.x, this.mesh.position.y, vec.z),
-            mass: 0,
-            shape: polyhedronShape,
-            material: ballPhysicsMaterial
-          
+          mass: 0,
+          shape: new CANNON.Box(new CANNON.Vec3(0.5,0.001,0.5)),
+          material: ballPhysicsMaterial,
+            position: new CANNON.Vec3(vec.x, this.mesh.position.y+0.14, vec.z),
           });
         this.world.add(ball.body);
         ball.mesh = this.demo.addVisual(ball.body);
@@ -447,6 +403,9 @@ export default class App extends React.Component {
             restitution: 0,
             friction: 1
           }));
+
+          ball.mesh.rotateX( 15*0.0174532925 );
+          ball.body.quaternion.copy(ball.mesh.quaternion);
       }
     }
   };
@@ -513,7 +472,7 @@ export default class App extends React.Component {
 
             this.scene.add(this.mesh);
             this._initGround(this.mesh.position.x, this.mesh.position.y, this.mesh.position.z);
-            this._initCar(this.mesh.position.x, this.mesh.position.y+10, this.mesh.position.z);
+            this._initCar(this.mesh.position.x, this.mesh.position.y+0.1, this.mesh.position.z);
             // this._initBoxes(this.mesh.position.x, this.mesh.position.y, this.mesh.position.z);
 
             console.log("Done loading asset");
@@ -553,8 +512,10 @@ export default class App extends React.Component {
   _onRender = delta => {
 
     // Update data points and planes
+    if (!this.chassiMesh) {
     this.points.update();
     this.planes.update();
+    }
 
     // update world
     this.world.step(1 / 60);
@@ -650,10 +611,10 @@ export default class App extends React.Component {
                   label={"GO"}
                   handlePress={()=>{
                     console.log("GO")
-                    this.vehicle.setWheelForce(0.8, 0);
-                    this.vehicle.setWheelForce(0.8, 1);
-                    this.vehicle.setWheelForce(0.8, 2);
-                    this.vehicle.setWheelForce(0.8, 3);
+                    this.vehicle.setWheelForce(1, 0);
+                    this.vehicle.setWheelForce(1, 1);
+                    this.vehicle.setWheelForce(1, 2);
+                    this.vehicle.setWheelForce(1, 3);
                   }}
                   handleRelease={()=>{
                     console.log("GO END")
@@ -667,10 +628,10 @@ export default class App extends React.Component {
                   label={"(R)"}
                   handlePress={()=>{
                     console.log("R")
-                    this.vehicle.setWheelForce(-0.4, 0);
-                    this.vehicle.setWheelForce(-0.4, 1);
-                    this.vehicle.setWheelForce(-0.4, 2);
-                    this.vehicle.setWheelForce(-0.4, 3);
+                    this.vehicle.setWheelForce(-0.5, 0);
+                    this.vehicle.setWheelForce(-0.5, 1);
+                    this.vehicle.setWheelForce(-0.5, 2);
+                    this.vehicle.setWheelForce(-0.5, 3);
                   }}
                   handleRelease={()=>{
                     console.log("R END")
