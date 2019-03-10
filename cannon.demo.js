@@ -801,13 +801,17 @@ Demo.prototype.shape2mesh = function(body){
             mesh.add(submesh);
             break;
 
+            var materialColor = 0x00ff00;
+        var solidMaterial = new THREE.MeshLambertMaterial( { color: materialColor } );
         case CANNON.Shape.types.BOX:
             var box_geometry = new THREE.BoxGeometry(  shape.halfExtents.x*2,
                                                         shape.halfExtents.y*2,
                                                         shape.halfExtents.z*2 );
-            mesh = new THREE.Mesh( box_geometry, this.currentMaterial );
+            mesh = new THREE.Mesh( box_geometry, solidMaterial );
             break;
 
+        var materialColor = 0xff0000;
+        var solidMaterial = new THREE.MeshLambertMaterial( { color: materialColor } );
         case CANNON.Shape.types.CONVEXPOLYHEDRON:
             var geo = new THREE.Geometry();
 
@@ -830,7 +834,7 @@ Demo.prototype.shape2mesh = function(body){
             }
             geo.computeBoundingSphere();
             geo.computeFaceNormals();
-            mesh = new THREE.Mesh( geo, this.currentMaterial );
+            mesh = new THREE.Mesh( geo, solidMaterial );
             break;
 
         case CANNON.Shape.types.HEIGHTFIELD:

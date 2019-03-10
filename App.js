@@ -69,9 +69,9 @@ export default class App extends React.Component {
     this.camera = new ThreeAR.Camera(width, height, 0.01, 10000);
 
     // THREE.PointLight that will update it's color and intensity based on ARKit's assumption of the room lighting.
-    this.arPointLight = new ThreeAR.Light();
-    this.arPointLight.position.y = 2;
-    this.scene.add(this.arPointLight);
+    // this.arPointLight = new ThreeAR.Light();
+    // this.arPointLight.position.y = 2;
+    // this.scene.add(this.arPointLight);
 
     // Add light that will cast shadows
     this.shadowLight = this._getShadowLight();
@@ -80,7 +80,7 @@ export default class App extends React.Component {
     this.scene.add(new THREE.DirectionalLightHelper(this.shadowLight));
 
     
-    // this.scene.add(new THREE.AmbientLight(0x404040));
+    this.scene.add(new THREE.AmbientLight(0xFFFFFF, 10));
 
     // A transparent plane that extends THREE.Mesh and receives shadows from other meshes.
     this.shadowFloor = new ThreeAR.ShadowFloor({
@@ -103,9 +103,12 @@ export default class App extends React.Component {
     this.demo = new Demo();
     // this.world = new CANNON.World();
     this.world = this.demo.getWorld();
-    this.world.broadphase = new CANNON.SAPBroadphase(this.world);
+    this.world.broadphase = new CANNON.NaiveBroadphase();
     this.world.gravity.set(0, -10, 0);
+    this.world.solver.iterations = 20;
     this.world.defaultContactMaterial.friction = 0;
+
+    this.objects = [];
 
     // this._initGround(0, -0.7, 0);
     // this._initCar(); 
@@ -135,9 +138,9 @@ export default class App extends React.Component {
 
     // Car
     var mass = 1;
-    var wheelMaterial = new CANNON.Material("wheelMaterial");
-    var wheelGroundContactMaterial = new CANNON.ContactMaterial(wheelMaterial, this.groundMaterial, {
-        friction: 0.8,
+    this.wheelMaterial = new CANNON.Material("wheelMaterial");
+    var wheelGroundContactMaterial = new CANNON.ContactMaterial(this.wheelMaterial, this.groundMaterial, {
+        friction: 100,
         restitution: 0,
         contactEquationStiffness: 1000
     });
@@ -146,7 +149,7 @@ export default class App extends React.Component {
     var chassisShape;
     var centerOfMassAdjust = new CANNON.Vec3(0, 0, 0);
     chassisShape = new CANNON.Box(new CANNON.Vec3(0.25/4, 0.08/4, 0.20/4));
-    var chassisBody = new CANNON.Body({ mass: 1, material: wheelMaterial });
+    var chassisBody = new CANNON.Body({ mass: 1, material: this.wheelMaterial });
     chassisBody.addShape(chassisShape, centerOfMassAdjust);
     chassisBody.position.set(x, y, z); //PLACE CAR
 
@@ -158,9 +161,9 @@ export default class App extends React.Component {
     });
     var axisWidth = 0.5/4;
     // var wheelShape = new CANNON.Sphere(0.125);
-    var wheelShape = new CANNON.Cylinder(0.09/4, 0.09/4, 0.09/4, 20);
+    var wheelShape = new CANNON.Cylinder(0.15/4, 0.15/4, 0.15/4, 20);
     var down = new CANNON.Vec3(0, -1, 0);
-    var wheelBody = new CANNON.Body({ mass: mass, material: wheelMaterial });
+    var wheelBody = new CANNON.Body({ mass: mass, material: this.wheelMaterial });
     wheelBody.addShape(wheelShape);
     this.vehicle.addWheel({
         body: wheelBody,
@@ -169,7 +172,7 @@ export default class App extends React.Component {
         direction: down
     });
     this.wheelBodies.push(wheelBody);
-    var wheelBody = new CANNON.Body({ mass: mass, material: wheelMaterial });
+    var wheelBody = new CANNON.Body({ mass: mass, material: this.wheelMaterial });
     wheelBody.addShape(wheelShape);
     this.vehicle.addWheel({
         body: wheelBody,
@@ -178,7 +181,7 @@ export default class App extends React.Component {
         direction: down
     });
     this.wheelBodies.push(wheelBody);
-    var wheelBody = new CANNON.Body({ mass: mass, material: wheelMaterial });
+    var wheelBody = new CANNON.Body({ mass: mass, material: this.wheelMaterial });
     wheelBody.addShape(wheelShape);
     this.vehicle.addWheel({
         body: wheelBody,
@@ -187,7 +190,7 @@ export default class App extends React.Component {
         direction: down
     });
     this.wheelBodies.push(wheelBody);
-    var wheelBody = new CANNON.Body({ mass: mass, material: wheelMaterial });
+    var wheelBody = new CANNON.Body({ mass: mass, material: this.wheelMaterial });
     wheelBody.addShape(wheelShape);
     this.vehicle.addWheel({
         body: wheelBody,
@@ -217,7 +220,7 @@ export default class App extends React.Component {
 
   }
 
-  _initBoxes = () => {
+  _initBoxes = (x,y,z) => {
     
     // ball
     this.objects = [];
@@ -227,10 +230,10 @@ export default class App extends React.Component {
       // ball.mesh = new THREE.Mesh( geometry, material );
       // this.scene.add(ball.mesh);
       ball.body = new CANNON.Body({
-        mass: 2,
-        shape: new CANNON.Box(new CANNON.Vec3(0.2,0.2,0.2)),
+        mass: 0.3,
+        shape: new CANNON.Box(new CANNON.Vec3(0.04,0.04,0.04)),
         material: ballPhysicsMaterial,
-        position: new CANNON.Vec3(Math.random()*0.5, 1, -1 + Math.random()*0.5),
+        position: new CANNON.Vec3(x+Math.random()*0.2, y+2,z+Math.random()*0.2),
       });
       this.world.add(ball.body);
       ball.mesh = this.demo.addVisual(ball.body);
@@ -242,6 +245,12 @@ export default class App extends React.Component {
         restitution: 0.7,
         friction: 0.6,
       }));
+
+      this.world.addContactMaterial(new CANNON.ContactMaterial(
+        this.wheelMaterial, ballPhysicsMaterial, {
+          restitution: 0.7,
+          friction: 100,
+        }));
 
   }
 
@@ -310,6 +319,7 @@ export default class App extends React.Component {
   };
 
   _onRotateGestureEvent = (event) => {
+    this.chassiBody
     console.log(event.nativeEvent.rotation);
     if( event.nativeEvent.state === State.ACTIVE && this.mesh ) {
       if (event.nativeEvent.rotation > 0.1 || event.nativeEvent.rotation < -0.1) {
@@ -335,11 +345,11 @@ export default class App extends React.Component {
       // Get the size of the renderer
       const size = this.renderer.getSize();
 
-      if (!this.mesh) {
+      // if (!this.mesh) {
         this._placeCube(x / size.width, y / size.height);
-      } else {
+      // } else {
         // this._runHitTest(x / size.width, y / size.height)
-      }
+      // }
     }
   };
 
@@ -364,7 +374,80 @@ export default class App extends React.Component {
     for (let hit of hitTest) {
 
       const { worldTransform } = hit;
-      this._loadAsset(worldTransform );
+      if (!this.mesh) {
+        this._loadAsset(worldTransform );
+      } else {
+        console.log("MM");
+        // var mesh = new THREE.Object3D();
+        // mesh.matrixAutoUpdate = false;
+
+        // const matrix = new THREE.Matrix4();
+        // matrix.fromArray(worldTransform);
+
+        // // Manually update the matrix
+        // mesh.applyMatrix(this.camera.matrix);
+        // mesh.updateMatrix();
+
+        var vec = new THREE.Vector3();
+        this.camera.getWorldPosition(vec);
+
+
+        
+        const ballPhysicsMaterial = new CANNON.Material();
+        const ball = {}
+        // ball.mesh = new THREE.Mesh( geometry, material );
+        // this.scene.add(ball.mesh);
+        console.log(vec)
+        // ball.body = new CANNON.Body({
+        //   mass: 0.3,
+        //   shape: new CANNON.Box(new CANNON.Vec3(0.04,0.04,0.04)),
+        //   material: ballPhysicsMaterial,
+        //   position: new CANNON.Vec3(vec.x, vec.y, vec.z),
+        // });
+
+        // ConvexPolyhedron tetra shape
+        var verts = [new CANNON.Vec3(0,0,0),
+          new CANNON.Vec3(0,0.1,0),
+          new CANNON.Vec3(0,0.1,0.5),
+          new CANNON.Vec3(0,0,0.5),
+          new CANNON.Vec3(0.3,0,0.5),
+          new CANNON.Vec3(0.3,0,0)
+         ];
+          var offset = 0;
+          for(var i=0; i<verts.length; i++){
+          var v = verts[i];
+          v.x += offset;
+          v.y += offset;
+          v.z += offset;
+          }
+          var polyhedronShape = new CANNON.ConvexPolyhedron(verts,
+                                          [
+                                              [0,1,5], // -x
+                                              [0,2,1], // -x
+                                              [0,3,2], // -x
+                                              [0,3,5], // -x
+                                              [5,3,4], // -x
+                                              [2,3,4], // -x
+                                              [5,2,4], // -x
+                                              [5,1,2], // -x
+                                          ]);
+          ball.body = new CANNON.Body({ 
+            position: new CANNON.Vec3(vec.x, this.mesh.position.y, vec.z),
+            mass: 0,
+            shape: polyhedronShape,
+            material: ballPhysicsMaterial
+          
+          });
+        this.world.add(ball.body);
+        ball.mesh = this.demo.addVisual(ball.body);
+        this.scene.add(ball.mesh);
+        this.objects.push(ball);
+        this.world.addContactMaterial(new CANNON.ContactMaterial(
+          this.wheelMaterial, ballPhysicsMaterial, {
+            restitution: 0,
+            friction: 1
+          }));
+      }
     }
   };
 
@@ -431,6 +514,7 @@ export default class App extends React.Component {
             this.scene.add(this.mesh);
             this._initGround(this.mesh.position.x, this.mesh.position.y, this.mesh.position.z);
             this._initCar(this.mesh.position.x, this.mesh.position.y+10, this.mesh.position.z);
+            // this._initBoxes(this.mesh.position.x, this.mesh.position.y, this.mesh.position.z);
 
             console.log("Done loading asset");
 
@@ -442,11 +526,14 @@ export default class App extends React.Component {
   }
 
   _runHitTest = (x, y) => {
+    console.log("hit test");
     const touch = {x: x, y: y};
     this.raycaster.setFromCamera(touch, this.camera);
-    const intersects = this.raycaster.intersectObjects(this.mesh.children);
-    if (intersects.length > 0) {
-      console.log("HIT");
+    const intersects = this.raycaster.intersectObjects(this.scene.children);
+    if( intersects.length > 0 ) {
+        intersects.map(function(d) {
+            console.log(d);
+        })
     }
   };
 
@@ -493,10 +580,10 @@ export default class App extends React.Component {
     }
 
     // Updates our light based on real light
-    this.arPointLight.update();
+    // this.arPointLight.update();
 
     if (this.chassiMesh) {
-      this.shadowFloor.opacity = this.arPointLight.intensity;
+      // this.shadowFloor.opacity = this.arPointLight.intensity;
       this.shadowLight.target.position.copy(this.chassiMesh.position);
       this.shadowLight.position.copy(this.shadowLight.target.position);
 
@@ -563,13 +650,30 @@ export default class App extends React.Component {
                   label={"GO"}
                   handlePress={()=>{
                     console.log("GO")
-                    this.vehicle.setWheelForce(0.15, 0);
-                    this.vehicle.setWheelForce(0.15, 1);
-                    this.vehicle.setWheelForce(0.15, 2);
-                    this.vehicle.setWheelForce(0.15, 3);
+                    this.vehicle.setWheelForce(0.8, 0);
+                    this.vehicle.setWheelForce(0.8, 1);
+                    this.vehicle.setWheelForce(0.8, 2);
+                    this.vehicle.setWheelForce(0.8, 3);
                   }}
                   handleRelease={()=>{
                     console.log("GO END")
+                    this.vehicle.setWheelForce(0, 0);
+                    this.vehicle.setWheelForce(0, 1);
+                    this.vehicle.setWheelForce(0, 2);
+                    this.vehicle.setWheelForce(0, 3);
+                  }}
+                  />
+                  <Button 
+                  label={"(R)"}
+                  handlePress={()=>{
+                    console.log("R")
+                    this.vehicle.setWheelForce(-0.4, 0);
+                    this.vehicle.setWheelForce(-0.4, 1);
+                    this.vehicle.setWheelForce(-0.4, 2);
+                    this.vehicle.setWheelForce(-0.4, 3);
+                  }}
+                  handleRelease={()=>{
+                    console.log("R END")
                     this.vehicle.setWheelForce(0, 0);
                     this.vehicle.setWheelForce(0, 1);
                     this.vehicle.setWheelForce(0, 2);
@@ -581,7 +685,7 @@ export default class App extends React.Component {
                     style={styles.container}
                     onContextCreate={this._onContextCreate}
                     onRender={this._onRender}
-                    onResize={this._onResize}
+                    // onResize={this._onResize}
                     // ARKit config - Tracks a device's orientation and position, and detects real-world surfaces, and known images or objects.
                     arTrackingConfiguration={AR.TrackingConfigurations.World}
                     // Enables an ARKit context
