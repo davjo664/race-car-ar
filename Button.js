@@ -9,6 +9,8 @@ import {
   Animated
 } from 'react-native'
 
+import { MaterialCommunityIcons } from '@expo/vector-icons';
+
 import {
   TapGestureHandler,
   RotationGestureHandler,
@@ -51,7 +53,8 @@ export default class Button extends Component {
         <Animated.View style={{flex: 1}}>
           <View style={styles.button}
           >
-            <Text style={{color:'white'}}> {this.props.label} </Text>
+          <MaterialCommunityIcons name={"arrow-"+this.props.name+"-bold-box-outline"} size={80} color="white" />
+            {/* <Text style={{color:'white'}}> {this.props.label} </Text> */}
           </View>
         </Animated.View>
       </LongPressGestureHandler>
@@ -65,6 +68,6 @@ const styles = StyleSheet.create({
     height: 80,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: 'rgba(52, 52, 52, 0.5)'
+    // backgroundColor: 'rgba(52, 52, 52, 0.5)'
   }
 })
