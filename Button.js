@@ -20,32 +20,13 @@ import {
 } from 'react-native-gesture-handler';
 
 export default class Button extends Component {
-  constructor(props) {
-    super(props)
-    this.props = props;
-    this.state = { count: 0 }
-  }
-
-  handlePressIn = () => {
-    this.setState({
-      count: this.state.count+1
-    })
-    this.props.onPressIn();
-  }
-
-  handlePressOut = () => {
-    this.props.onPressOut();
-  }
-
  render() {
     return (
       <LongPressGestureHandler
           onHandlerStateChange={({ nativeEvent }) => {
             if (nativeEvent.state === State.ACTIVE) {
-              // console.log("LONG");
               this.props.handlePress();
             } else {
-              // console.log("END LONG");
               this.props.handleRelease();
             }
           }}
@@ -54,7 +35,6 @@ export default class Button extends Component {
           <View style={styles.button}
           >
           <MaterialCommunityIcons name={"arrow-"+this.props.name+"-bold-box-outline"} size={80} color="white" />
-            {/* <Text style={{color:'white'}}> {this.props.label} </Text> */}
           </View>
         </Animated.View>
       </LongPressGestureHandler>

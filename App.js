@@ -16,7 +16,7 @@ import {
 } from 'react-native-gesture-handler';
 
 import * as CANNON from 'cannon';
-import { Demo } from './cannon.demo';
+import { CannonWorld } from './cannonworld';
 console.disableYellowBox = true;
 
 /**
@@ -26,8 +26,8 @@ console.disableYellowBox = true;
  * @param {integer} wheelIndex
  * @todo check coordinateSystem
  */
+// Overrides setSteeringValue to use correct coordinate system
 CANNON.RigidVehicle.prototype.setSteeringValue = function(value, wheelIndex){
-  // console.log("STEERSSS");
   // Set angle of the hinge axis
   var axis = this.wheelAxes[wheelIndex];
 
@@ -42,10 +42,14 @@ CANNON.RigidVehicle.prototype.setSteeringValue = function(value, wheelIndex){
   );
 };
 
-
 const { width, height } = Dimensions.get('window');
 
 export default class App extends React.Component {
+
+  constructor(props) {
+    super(props);
+    this.state = { vehicleShown: false };
+  }
 
   /////////// CREATE CONTEXT ////////////////////
 
@@ -69,17 +73,10 @@ export default class App extends React.Component {
     // THREE.PerspectiveCamera that updates it's transform based on the device's orientation
     this.camera = new ThreeAR.Camera(width, height, 0.01, 10000);
 
-    // THREE.PointLight that will update it's color and intensity based on ARKit's assumption of the room lighting.
-    // this.arPointLight = new ThreeAR.Light();
-    // this.arPointLight.position.y = 2;
-    // this.scene.add(this.arPointLight);
-
     // Add light that will cast shadows
     this.shadowLight = this._getShadowLight();
     this.scene.add(this.shadowLight);
     this.scene.add(this.shadowLight.target);
-    this.scene.add(new THREE.DirectionalLightHelper(this.shadowLight));
-
     
     this.scene.add(new THREE.AmbientLight(0xFFFFFF, 2));
 
@@ -91,31 +88,22 @@ export default class App extends React.Component {
     });
     this.shadowFloor.position.y = 0.0001;
 
-    // Let's us see all the raw data points.
-    this.points = new ThreeAR.Points();
-    // this.scene.add(this.points);
-
-    // Let's us see all horizontal planes based on the raw data points.
+    // Horizontal planes based on the raw data points.
     this.planes = new ThreeAR.Planes();
     this.scene.add(this.planes);
 
     // Ray caster for hit test
     this.raycaster = new THREE.Raycaster();
 
-    this.demo = new Demo();
-    // this.world = new CANNON.World();
-    this.world = this.demo.getWorld();
+    this.cannonWorld = new CannonWorld();
+    this.world = this.cannonWorld.getWorld();
     this.world.broadphase = new CANNON.NaiveBroadphase();
     this.world.gravity.set(0, -10, 0);
     this.world.solver.iterations = 30;
     this.world.defaultContactMaterial.friction = 0;
 
-    this.objects = [];
+    this.jumps = [];
     this.shadowLights = [];
-
-    // this._initGround(0, -0.7, 0);
-    // this._initCar(); 
-    // this._initBoxes();
   };
 
   _initGround = (x, y, z) => {
@@ -131,15 +119,12 @@ export default class App extends React.Component {
     this.groundBody.quaternion.setFromAxisAngle(new CANNON.Vec3(1,0,0), -Math.PI/2);
     this.world.add(this.groundBody);
 
-    // this.mesh3 = new THREE.Mesh( new THREE.BoxGeometry( 5, 0.001, 5 ), new THREE.MeshBasicMaterial( { color: 0x000000, wireframe: false } ) );
-    // this.mesh3.position.set(x,y, z);
-    // this.scene.add( this.mesh3 );
-
   }
 
   _initCar = (x,y,z) => {
 
     // Car
+    // Based on the RigidVechicle demo from Cannon.js: https://github.com/schteppe/cannon.js/blob/master/demos/rigidVehicle.html
     var mass = 1;
     this.wheelMaterial = new CANNON.Material("wheelMaterial");
     var wheelGroundContactMaterial = new CANNON.ContactMaterial(this.wheelMaterial, this.groundMaterial, {
@@ -147,7 +132,6 @@ export default class App extends React.Component {
         restitution: 0,
         contactEquationStiffness: 1000
     });
-    // We must add the contact materials to the world
     this.world.addContactMaterial(wheelGroundContactMaterial);
     var chassisShape;
     var centerOfMassAdjust = new CANNON.Vec3(0, 0, 0);
@@ -163,7 +147,6 @@ export default class App extends React.Component {
         chassisBody: chassisBody
     });
     var axisWidth = 0.5/6;
-    // var wheelShape = new CANNON.Sphere(0.125);
     var wheelShape = new CANNON.Cylinder(0.15/6, 0.15/6, 0.15/6, 20);
     var down = new CANNON.Vec3(0, -1, 0);
     var wheelBody = new CANNON.Body({ mass: mass, material: this.wheelMaterial });
@@ -209,60 +192,30 @@ export default class App extends React.Component {
     // Constrain wheels
     var constraints = [];
     // Add visuals
-    this.chassiMesh = this.demo.addVisual(this.vehicle.chassisBody);
+    this.chassiMesh = this.cannonWorld.addVisual(this.vehicle.chassisBody);
     this.chassiMesh.castShadow = true;
     this.chassiBody = this.vehicle.chassisBody;
     this.scene.add(this.chassiMesh);
     for(var i=0; i<this.vehicle.wheelBodies.length; i++){
-        var mesh = this.demo.addVisual(this.vehicle.wheelBodies[i]);
+        var mesh = this.cannonWorld.addVisual(this.vehicle.wheelBodies[i]);
         mesh.castShadow = true;
         this.wheelMeshes.push(mesh);
         this.scene.add(mesh);
     }
     this.vehicle.addToWorld(this.world);
 
-  }
-
-  _initBoxes = (x,y,z) => {
-    
-    // ball
-    this.objects = [];
-    const ballPhysicsMaterial = new CANNON.Material();
-    for (let i = 0; i < 5; ++i) {
-      const ball = {}
-      // ball.mesh = new THREE.Mesh( geometry, material );
-      // this.scene.add(ball.mesh);
-      ball.body = new CANNON.Body({
-        mass: 0.3,
-        shape: new CANNON.Box(new CANNON.Vec3(0.04,0.04,0.04)),
-        material: ballPhysicsMaterial,
-        position: new CANNON.Vec3(x+Math.random()*0.2, y+2,z+Math.random()*0.2),
-      });
-      this.world.add(ball.body);
-      ball.mesh = this.demo.addVisual(ball.body);
-      this.scene.add(ball.mesh);
-      this.objects.push(ball);
-    }
-    this.world.addContactMaterial(new CANNON.ContactMaterial(
-      this.groundMaterial, ballPhysicsMaterial, {
-        restitution: 0.7,
-        friction: 0.6,
-      }));
-
-      this.world.addContactMaterial(new CANNON.ContactMaterial(
-        this.wheelMaterial, ballPhysicsMaterial, {
-          restitution: 0.7,
-          friction: 100,
-        }));
+    this.setState(previousState => (
+      { vehicleShown: true }
+    ))
 
   }
 
   _getShadowLight = () => {
+
     let light = new THREE.DirectionalLight(0xffffff, 0.2);
 
     light.castShadow = true;
 
-    // default is 50
     const shadowSize = 1;
     light.shadow.camera.left = -shadowSize;
     light.shadow.camera.right = shadowSize;
@@ -272,27 +225,23 @@ export default class App extends React.Component {
     light.shadow.camera.far = 100;
     light.shadow.camera.updateProjectionMatrix();
 
-    // default is 512
     light.shadow.mapSize.width = 512;
     light.shadow.mapSize.height = light.shadow.mapSize.width;
 
     return light;
+
   };
 
   //////////// GESTURE EVENTS ////////////////
 
   _onPanGestureEvent = async ({ nativeEvent }) => {
-    console.log("pan");
-    if (nativeEvent.state === State.ACTIVE && this.mesh) {
-
+    if (nativeEvent.state === State.ACTIVE && this.trackMesh) {
       var mesh;
-      if (this.objects.length == 0) {
-        // this.chair.position.setY(0.1);
-        mesh = this.mesh;
+      if (this.jumps.length == 0) {
+        mesh = this.trackMesh;
       } else {
-        mesh = this.objects[this.objects.length-1].mesh;
+        mesh = this.jumps[this.jumps.length-1].mesh;
       }
-      
 
       // Get the size of the renderer
       const size = this.renderer.getSize();
@@ -326,18 +275,18 @@ export default class App extends React.Component {
         mesh.applyMatrix(matrix);
         mesh.updateMatrix();
 
-        if(this.objects.length == 0) {
-          this.groundBody.position.y = this.mesh.position.y+0.01; //PLACE CAR
+        if(this.jumps.length == 0) {
+          this.groundBody.position.y = this.trackMesh.position.y+0.01; //PLACE CAR
         } else {
-          mesh.position.y = this.mesh.position.y+0.04;
-          this.objects[this.objects.length-1].body.position.copy(mesh.position);
+          mesh.position.y = this.trackMesh.position.y+0.04;
+          this.jumps[this.jumps.length-1].body.position.copy(mesh.position);
         }
       }
     }
   };
 
   _onRotateGestureEvent = (event) => {
-    if( event.nativeEvent.state === State.ACTIVE && this.mesh) {
+    if( event.nativeEvent.state === State.ACTIVE && this.trackMesh) {
       if (event.nativeEvent.rotation > 0.1 || event.nativeEvent.rotation < -0.1) {
         var rotateVal = 0;
         if ( event.nativeEvent.rotation > 1.5) {
@@ -348,16 +297,14 @@ export default class App extends React.Component {
           rotateVal = -event.nativeEvent.rotation /30;
         }
 
-        if (this.objects.length == 0) {
-          this.chair.rotateY( rotateVal );
+        if (this.jumps.length == 0) {
+          this.track.rotateY( rotateVal );
         } else {
-          var obj = this.objects[this.objects.length-1];
+          var obj = this.jumps[this.jumps.length-1];
           // Reset earlier transformations
           var rotY = obj.mesh.rotation.y;
           obj.mesh.rotation.set(0,0,0);
           obj.mesh.updateMatrix()
-          // console.log("rotY:" + rotY);
-          // console.log("rotateVal + rotY:" + (rotateVal + rotY));
           obj.mesh.rotateY( rotateVal + rotY );
           obj.mesh.rotateX( 15*0.0174532925 );
           obj.body.quaternion.copy(obj.mesh.quaternion);
@@ -376,18 +323,13 @@ export default class App extends React.Component {
       }
       // Get the size of the renderer
       const size = this.renderer.getSize();
-
-      // if (!this.mesh) {
-        this._placeCube(x / size.width, y / size.height);
-      // } else {
-        // this._runHitTest(x / size.width, y / size.height)
-      // }
+      this._placeJump(x / size.width, y / size.height);
     }
   };
 
   //////// HELPER FUNCTIONS FOR GESTURES ///////////
 
-  _placeCube = async (x, y) => {
+  _placeJump = async (x, y) => {
 
     if (!this.renderer) {
       return;
@@ -406,44 +348,44 @@ export default class App extends React.Component {
     for (let hit of hitTest) {
 
       const { worldTransform } = hit;
-      if (!this.mesh) {
-        this._loadAsset(worldTransform );
+      if (!this.trackMesh) {
+        // Adding the track
+        this._loadAsset( worldTransform );
       } else {
         var vec = new THREE.Vector3();
         this.camera.getWorldPosition(vec);
         
-        const ballPhysicsMaterial = new CANNON.Material();
-        const ball = {}
-        console.log(vec)
-          ball.body = new CANNON.Body({ 
-          mass: 0,
-          shape: new CANNON.Box(new CANNON.Vec3(0.15,0.001,0.15)),
-          material: ballPhysicsMaterial,
-            position: new CANNON.Vec3(vec.x, this.mesh.position.y+0.04, vec.z),
-          });
-        this.world.add(ball.body);
-        ball.mesh = this.demo.addVisual(ball.body);
-        this.scene.add(ball.mesh);
-        this.objects.push(ball);
+        const jumpPhysicsMaterial = new CANNON.Material();
+        const jump = {}
+        jump.body = new CANNON.Body({ 
+        mass: 0,
+        shape: new CANNON.Box(new CANNON.Vec3(0.15,0.001,0.15)),
+        material: jumpPhysicsMaterial,
+          position: new CANNON.Vec3(vec.x, this.trackMesh.position.y+0.04, vec.z),
+        });
+        this.world.add(jump.body);
+        jump.mesh = this.cannonWorld.addVisual(jump.body);
+        this.scene.add(jump.mesh);
+        this.jumps.push(jump);
         this.world.addContactMaterial(new CANNON.ContactMaterial(
-          this.wheelMaterial, ballPhysicsMaterial, {
-            restitution: 0,
-            friction: 1
-          }));
+        this.wheelMaterial, jumpPhysicsMaterial, {
+          restitution: 0,
+          friction: 1
+        }));
 
-          ball.mesh.rotateX( 15*0.0174532925 );
-          ball.body.quaternion.copy(ball.mesh.quaternion);
+        jump.mesh.rotateX( 15*0.0174532925 );
+        jump.body.quaternion.copy(jump.mesh.quaternion);
 
-          // Add light that will cast shadows
-          this.shadowLights.push(this._getShadowLight());
-          this.scene.add(this.shadowLights[this.shadowLights.length-1]);
-          this.scene.add(this.shadowLights[this.shadowLights.length-1].target);
-          this.scene.add(new THREE.DirectionalLightHelper(this.shadowLights[this.shadowLights.length-1]));
+        // Add light that will cast shadows
+        this.shadowLights.push(this._getShadowLight());
+        this.scene.add(this.shadowLights[this.shadowLights.length-1]);
+        this.scene.add(this.shadowLights[this.shadowLights.length-1].target);
       }
     }
+
   };
 
-  _loadAsset = (worldTransform ) => {
+  _loadAsset = ( worldTransform ) => {
 
     var url = `https://poly.googleapis.com/v1/assets/bESvWAwSMwy/?key=${API_KEY}`;
 
@@ -452,86 +394,56 @@ export default class App extends React.Component {
     request.addEventListener( 'load', ( event ) => {
 
       var asset = JSON.parse( event.target.response );
-
       var format = asset.formats.find( format => { return format.formatType === 'OBJ'; } );
-
       if ( format !== undefined ) {
-
         var obj = format.root;
-        // var mtl = format.resources.find( resource => { return resource.url.endsWith( 'mtl' ) } );
+        var loader = new THREE.OBJLoader();
 
-        // var path = obj.url.slice( 0, obj.url.indexOf( obj.relativePath ) );
+        loader.load( obj.url, ( object ) => {
 
-        // var loader = new THREE.MTLLoader();
-        // loader.setCrossOrigin( true );
-        // loader.setMaterialOptions( { ignoreZeroRGBs: true } );
-        // loader.setTexturePath( path );
-        // loader.load( mtl.url, ( materials ) => {
+          // Creates a box around the chair to be able to know the longest side
+          var box = new THREE.Box3();
+          box.setFromObject( object );
 
-          var loader = new THREE.OBJLoader();
-          // loader.setMaterials( materials );
-          loader.load( obj.url, ( object ) => {
+          object.rotation.set(0,-90*0.0174532925,0);
 
-            // Creates a box around the chair to be able to know the longest side
-            var box = new THREE.Box3();
-            box.setFromObject( object );
+          this.track = new THREE.Group();
+          this.track.add( object );
+          // Scale the chair so that the Longest side will be 1 meter
+          this.track.scale.setScalar( 5 / box.getSize().length() );
+          this.track.position.setY(-0.01); //Correction for the chair model
+          
+          // console.log(object.children);
+          object.children[0].material = new THREE.LineBasicMaterial( { color: 0xffffff } ) 
+          object.children[1].material = new THREE.MeshBasicMaterial( { color: 0x111111 } );
 
-            object.rotation.set(0,-90*0.0174532925,0);
+          this.trackMesh = new THREE.Object3D();
+          this.trackMesh.add(this.track);
+          this.scene.add(this.trackMesh);
+          this.trackMesh.add(this.shadowFloor);
 
-            this.chair = new THREE.Group();
-            this.chair.add( object );
-            // Scale the chair so that the Longest side will be 1 meter
-            this.chair.scale.setScalar( 5 / box.getSize().length() );
-            this.chair.position.setY(-0.01); //Correction for the chair model
-            
-            console.log(object.children);
-            object.children[0].material = new THREE.MeshLambertMaterial( { color: 0xffffff } );
-            object.children[1].material = new THREE.MeshLambertMaterial( { color: 0x333333 } );
+          // Disable the matrix auto updating system
+          this.trackMesh.matrixAutoUpdate = false;
 
-            this.mesh = new THREE.Object3D();
-            this.mesh.add(this.chair);
-            this.scene.add(this.mesh);
-            this.mesh.add(this.shadowFloor);
+          const matrix = new THREE.Matrix4();
+          matrix.fromArray(worldTransform);
 
-            // Disable the matrix auto updating system
-            this.mesh.matrixAutoUpdate = false;
+          // Manually update the matrix
+          this.trackMesh.applyMatrix(matrix);
+          this.trackMesh.updateMatrix();
 
-            const matrix = new THREE.Matrix4();
-            matrix.fromArray(worldTransform);
+          this.scene.add(this.trackMesh);
+          this._initGround(this.trackMesh.position.x, this.trackMesh.position.y, this.trackMesh.position.z);
+          this._initCar(this.trackMesh.position.x, this.trackMesh.position.y+0.7, this.trackMesh.position.z);
+          this.scene.remove(this.planes);
 
-            // Manually update the matrix
-            this.mesh.applyMatrix(matrix);
-            this.mesh.updateMatrix();
+          console.log("Done loading asset");
 
-            this.scene.add(this.mesh);
-            this._initGround(this.mesh.position.x, this.mesh.position.y, this.mesh.position.z);
-            this._initCar(this.mesh.position.x, this.mesh.position.y+0.1, this.mesh.position.z);
-            this.scene.remove(this.planes);
-            // this._initBoxes(this.mesh.position.x, this.mesh.position.y, this.mesh.position.z);
-
-            console.log("Done loading asset");
-
-          } );
-        // } );
+        });
       }
     } );
     request.send( null );
-  }
 
-  _runHitTest = (x, y) => {
-    console.log("hit test");
-    const touch = {x: x, y: y};
-    this.raycaster.setFromCamera(touch, this.camera);
-    const intersects = this.raycaster.intersectObjects(this.scene.children);
-    if( intersects.length > 0 ) {
-        intersects.map(function(d) {
-            console.log(d);
-        })
-    }
-  };
-
-  _onPanEnd = ( event ) => {
-    // this.chair.position.setY(-0.01);
   }
 
   //////////////////// RESIZE AND RENDER ////////////////////////////////
@@ -545,25 +457,23 @@ export default class App extends React.Component {
 
   _onRender = delta => {
 
-    // Update data points and planes
+    // Update data planes
     if (!this.chassiMesh) {
-      // this.points.update();
       this.planes.update();
     }
 
     // update world
     this.world.step(1 / 60);
 
-    // update objects
-    if (this.objects) {
-      for (var i = 0; i < this.objects.length; i++) {
-        this.objects[i].mesh.position.copy(this.objects[i].body.position);
-        this.objects[i].mesh.quaternion.copy(this.objects[i].body.quaternion);
+    // update jump objects
+    if (this.jumps) {
+      for (var i = 0; i < this.jumps.length; i++) {
+        this.jumps[i].mesh.position.copy(this.jumps[i].body.position);
+        this.jumps[i].mesh.quaternion.copy(this.jumps[i].body.quaternion);
 
         var shadowLight = this.shadowLights[i];
         
-        // this.shadowFloor.opacity = this.arPointLight.intensity;
-        shadowLight.target.position.copy(this.objects[i].mesh.position);
+        shadowLight.target.position.copy(this.jumps[i].mesh.position);
         shadowLight.position.copy(shadowLight.target.position);
 
         // Place the shadow light source over the object and a bit tilted
@@ -573,24 +483,21 @@ export default class App extends React.Component {
       }
     }
 
-
-    // update objects
+    // update wheel objects
     if (this.wheelBodies) {
       for(var i = 0; i < this.wheelBodies.length; i++) {
         this.wheelMeshes[i].position.copy(this.wheelBodies[i].position);
         this.wheelMeshes[i].quaternion.copy(this.wheelBodies[i].quaternion);
       }
     }
+
+    // update chassi object
     if (this.chassiMesh) {
       this.chassiMesh.position.copy(this.chassiBody.position);
       this.chassiMesh.quaternion.copy(this.chassiBody.quaternion);
     }
 
-    // Updates our light based on real light
-    // this.arPointLight.update();
-
     if (this.chassiMesh) {
-      // this.shadowFloor.opacity = this.arPointLight.intensity;
       this.shadowLight.target.position.copy(this.chassiMesh.position);
       this.shadowLight.position.copy(this.shadowLight.target.position);
 
@@ -605,121 +512,103 @@ export default class App extends React.Component {
 
   render() {
     return (
-      <PanGestureHandler onGestureEvent={this._onPanGestureEvent} onHandlerStateChange={this._onPanEnd}>
+      <PanGestureHandler onGestureEvent={this._onPanGestureEvent}>
         <Animated.View style={styles.wrapper}>
           <RotationGestureHandler onGestureEvent={this._onRotateGestureEvent}>
             <Animated.View style={styles.wrapper}>
               <TapGestureHandler onHandlerStateChange={this._onSingleTap}>
                 <Animated.View style={styles.wrapper}>
                   <LongPressGestureHandler
-                  onHandlerStateChange={({ nativeEvent }) => {
-                    if (nativeEvent.state === State.ACTIVE && this.chassiMesh) {
-                     console.log("LOONG");
-                     // Add an impulse to the center
-                    var impulse = new CANNON.Vec3(10,20,0);
-                    this.chassiBody.applyImpulse(impulse,this.chassiBody.position);
-                    }
-                  }}
-                  minDurationMs={500}>
-                  <Animated.View style={styles.wrapper}>
-                <View style={{
-                    flex: 1, 
-                    flexDirection: 'row',
-                    position: 'absolute',
-                    justifyContent: 'space-between',
-                    bottom: 20,
-                    left: 0
-                  }}>
-                  <Button 
-                  name={"left"}
-                  handlePress={()=>{
-                    console.log("LEFT")
-                    // this.vehicle.setSteeringValue(-0.1, 0); //LEFT REAR
-                    //this.vehicle.setSteeringValue(10, 1); //RIGHT REAR
-                    this.vehicle.setSteeringValue(-0.4, 2); //LEFT FRONT
-                    this.vehicle.setSteeringValue(-0.4, 3); // RIGHT FRONT
+                    onHandlerStateChange={({ nativeEvent }) => {
+                      if (nativeEvent.state === State.ACTIVE && this.chassiMesh) {
+                        // Add an impulse to the center
+                        var impulse = new CANNON.Vec3(10,20,0);
+                        this.chassiBody.applyImpulse(impulse,this.chassiBody.position);
+                      }
+                    }}
+                    minDurationMs={500}>
+                    <Animated.View style={styles.wrapper}>
+                      <View style={{
+                          flex: 1, 
+                          flexDirection: 'row',
+                          position: 'absolute',
+                          justifyContent: 'space-between',
+                          bottom: this.state.vehicleShown ? 20 : -80,
+                          left: 0
+                        }}>
+                        <Button 
+                          name={"left"}
+                          handlePress={()=>{
+                            // console.log("LEFT")
+                            // this.vehicle.setSteeringValue(-0.1, 0); //LEFT REAR
+                            //this.vehicle.setSteeringValue(10, 1); //RIGHT REAR
+                            this.vehicle.setSteeringValue(-0.4, 2); //LEFT FRONT
+                            this.vehicle.setSteeringValue(-0.4, 3); // RIGHT FRONT
 
-                  }}
-                  handleRelease={()=>{
-                    console.log("LEFT END")
-                    this.vehicle.setSteeringValue(0, 2);
-                    this.vehicle.setSteeringValue(0, 3);
-                  }}
-                  />
+                          }}
+                          handleRelease={()=>{
+                            // console.log("LEFT END")
+                            this.vehicle.setSteeringValue(0, 2);
+                            this.vehicle.setSteeringValue(0, 3);
+                          }}
+                          />
 
-                  <Button 
-                  name={"right"}
-                  handlePress={()=>{
-                    console.log("RIGHT")
-                    // this.vehicle.setSteeringValue(-0.1, 0); //LEFT REAR
-                    //this.vehicle.setSteeringValue(10, 1); //RIGHT REAR
-                    this.vehicle.setSteeringValue(0.3, 2); //LEFT FRONT
-                    this.vehicle.setSteeringValue(0.3, 3); // RIGHT FRONT
+                          <Button 
+                          name={"right"}
+                          handlePress={()=>{
+                            this.vehicle.setSteeringValue(0.3, 2); 
+                            this.vehicle.setSteeringValue(0.3, 3);
 
-                  }}
-                  handleRelease={()=>{
-                    console.log("RIGHT END")
-                    this.vehicle.setSteeringValue(0, 2);
-                    this.vehicle.setSteeringValue(0, 3);
-                  }}
-                  />
+                          }}
+                          handleRelease={()=>{
+                            this.vehicle.setSteeringValue(0, 2);
+                            this.vehicle.setSteeringValue(0, 3);
+                          }}
+                          />
 
-                  <Button 
-                  name={"up"}
-                  handlePress={()=>{
-                    console.log("GO")
-                    // this.vehicle.setWheelForce(0.6, 0);
-                    // this.vehicle.setWheelForce(0.6, 1);
-                    this.vehicle.setWheelForce(0.4, 2);
-                    this.vehicle.setWheelForce(0.4, 3);
-                  }}
-                  handleRelease={()=>{
-                    console.log("GO END")
-                    // this.vehicle.setWheelForce(0, 0);
-                    // this.vehicle.setWheelForce(0, 1);
-                    this.vehicle.setWheelForce(0, 2);
-                    this.vehicle.setWheelForce(0, 3);
-                  }}
-                  />
-                  <Button 
-                  name={"down"}
-                  handlePress={()=>{
-                    console.log("R")
-                    // this.vehicle.setWheelForce(-0.4, 0);
-                    // this.vehicle.setWheelForce(-0.4, 1);
-                    this.vehicle.setWheelForce(-0.3, 2);
-                    this.vehicle.setWheelForce(-0.3, 3);
-                  }}
-                  handleRelease={()=>{
-                    console.log("R END")
-                    // this.vehicle.setWheelForce(0, 0);
-                    // this.vehicle.setWheelForce(0, 1);
-                    this.vehicle.setWheelForce(0, 2);
-                    this.vehicle.setWheelForce(0, 3);
-                  }}
-                  />
-                  </View>
-                  <GraphicsView
-                    style={styles.container}
-                    onContextCreate={this._onContextCreate}
-                    onRender={this._onRender}
-                    // onResize={this._onResize}
-                    // ARKit config - Tracks a device's orientation and position, and detects real-world surfaces, and known images or objects.
-                    arTrackingConfiguration={AR.TrackingConfigurations.World}
-                    // Enables an ARKit context
-                    isArEnabled
-                    // Renders information related to ARKit the tracking state
-                    isArCameraStateEnabled
-                  />
+                          <Button 
+                          name={"up"}
+                          handlePress={()=>{
+                            this.vehicle.setWheelForce(0.45, 2);
+                            this.vehicle.setWheelForce(0.45, 3);
+                          }}
+                          handleRelease={()=>{
+                            this.vehicle.setWheelForce(0, 2);
+                            this.vehicle.setWheelForce(0, 3);
+                          }}
+                          />
+                          <Button 
+                          name={"down"}
+                          handlePress={()=>{
+                            this.vehicle.setWheelForce(-0.3, 2);
+                            this.vehicle.setWheelForce(-0.3, 3);
+                          }}
+                          handleRelease={()=>{
+                            this.vehicle.setWheelForce(0, 2);
+                            this.vehicle.setWheelForce(0, 3);
+                          }}
+                          />
+                      </View>
+                      <GraphicsView
+                        style={styles.container}
+                        onContextCreate={this._onContextCreate}
+                        onRender={this._onRender}
+                        // onResize={this._onResize}
+                        // ARKit config - Tracks a device's orientation and position, and detects real-world surfaces, and known images or objects.
+                        arTrackingConfiguration={AR.TrackingConfigurations.World}
+                        // Enables an ARKit context
+                        isArEnabled
+                        // Renders information related to ARKit the tracking state
+                        isArCameraStateEnabled
+                      />
                     </Animated.View>
                   </LongPressGestureHandler>
                 </Animated.View>
               </TapGestureHandler>
             </Animated.View>
-            </RotationGestureHandler>
+          </RotationGestureHandler>
         </Animated.View>
-        </PanGestureHandler>
-      
+      </PanGestureHandler>
     );
   }
 }
